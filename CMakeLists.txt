@@ -434,8 +434,12 @@ include(cmake/modules/ROCM.cmake)
 include(cmake/modules/LLVM.cmake)
 include(cmake/modules/Micro.cmake)
 include(cmake/modules/contrib/EthosN.cmake)
+<<<<<<< HEAD
 include(cmake/modules/contrib/CMSISNN.cmake)
 include(cmake/modules/contrib/EthosU.cmake)
+=======
+include(cmake/modules/contrib/VTAMatmul.cmake)
+>>>>>>> 0191bd467 ([ add ] barebone hook for dense ops)
 include(cmake/modules/contrib/BLAS.cmake)
 include(cmake/modules/contrib/CODEGENC.cmake)
 include(cmake/modules/contrib/DNNL.cmake)

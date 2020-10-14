@@ -1,0 +1,7 @@
+if(USE_VTA_MATMUL)
+  file(GLOB VTAMATMUL_RELAY_CONTRIB_SRC src/relay/backend/contrib/vta_matmul/codegen.cc)
+  list(APPEND COMPILER_SRCS ${VTAMATMUL_RELAY_CONTRIB_SRC})
+  file(GLOB VTAMATMUL_CONTRIB_SRC src/runtime/contrib/vta_matmul/vta_matmul.cc)
+  list(APPEND RUNTIME_SRCS ${VTAMATMUL_CONTRIB_SRC})
+  message(STATUS "Build with Codegen for VTA...")
+endif(USE_VTA_MATMUL)
