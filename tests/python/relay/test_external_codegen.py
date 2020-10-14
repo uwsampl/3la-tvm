@@ -358,6 +358,40 @@ def test_load_params_with_constants_in_ext_codegen():
     rt_mod = tvm.contrib.graph_executor.create(graph_module.get_graph_json(), lib, tvm.cpu(0))
     rt_mod.load_params(runtime.save_param_dict(graph_module.get_params()))
 
+def test_extern_vta():
+    if not tvm.get_global_func("relay.ext.vta_matmul", True):
+        print('VTA ILA codegen not supported')
+
+    dtype = 'float32'
+    ishape = (3, 24)
+    wshape = (5, 24)
+
+    data = relay.var('data', shape=(ishape), dtype=dtype)
+    weight = relay.const(np.random.uniform(0, 1, wshape).astype(dtype), dtype=dtype)
+
+    data_1 = relay.log(data)
+    o1 = relay.multiply(data_1, relay.const(np.random.uniform(0, 1, ishape)))
+
+    dense_param = relay.var('data_p', shape=(ishape), dtype=dtype)
+    dense_func = relay.Function([dense_param], relay.nn.dense(dense_param, weight))
+    dense_func = set_external_func_attr(dense_func, 'vta_matmul', 'vta_matmul_test_')
+
+    out = relay.Call(dense_func, [o1])
+    f = relay.Function([data], out)
+    inputs = relay.var('input', shape=ishape, dtype=dtype)
+    call = relay.Call(f, [inputs])
+
+    mod = tvm.IRModule()
+    mod['main'] = f
+    mod = relay.transform.InferType()(mod)
+    mod = tvm.IRModule.from_expr(call)
+    # mod = relay.transform.AnnotateTarget(['vta_matmul'])(mod)
+    # mod = relay.transform.MergeCompilerRegions()(mod)
+    # mod = relay.transform.PartitionGraph()(mod)
+    in_data = np.random.uniform(0, 1, ishape).astype(dtype)
+    print(check_result(mod, {
+        'input' : in_data
+    }, (3, 5), np.random.uniform(0, 1, (3, 5)).astype(dtype)))
 
 if __name__ == "__main__":
     test_multi_node_subgraph()
