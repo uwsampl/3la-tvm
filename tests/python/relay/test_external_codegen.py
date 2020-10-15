@@ -22,7 +22,12 @@ import numpy as np
 import pytest
 
 import tvm
+from tvm import te
 from tvm import relay, runtime
+import tvm.relay.testing
+
+from tvm.relay import transform
+from tvm.contrib import utils
 from tvm.relay.build_module import bind_params_by_name
 from tvm.relay.op.annotation import compiler_begin, compiler_end
 from utils.external_codegen import (
@@ -363,11 +368,7 @@ def test_extern_vta():
     data_1 = relay.log(data)
     o1 = relay.multiply(data_1, relay.const(np.random.uniform(0, 1, ishape)))
 
-    dense_param = relay.var('data_p', shape=(ishape), dtype=dtype)
-    dense_func = relay.Function([dense_param], relay.nn.dense(dense_param, weight))
-    dense_func = set_external_func_attr(dense_func, 'vta_matmul', 'vta_matmul_test_')
-
-    out = relay.Call(dense_func, [o1])
+    out = relay.nn.dense(o1, weight) # relay.Call(dense_func, [o1])
     f = relay.Function([data], out)
     inputs = relay.var('input', shape=ishape, dtype=dtype)
     call = relay.Call(f, [inputs])
@@ -376,9 +377,9 @@ def test_extern_vta():
     mod['main'] = f
     mod = relay.transform.InferType()(mod)
     mod = tvm.IRModule.from_expr(call)
-    # mod = relay.transform.AnnotateTarget(['vta_matmul'])(mod)
-    # mod = relay.transform.MergeCompilerRegions()(mod)
-    # mod = relay.transform.PartitionGraph()(mod)
+    seq = tvm.transform.Sequential([transform.AnnotateTarget('vta_matmul'),
+                                    transform.PartitionGraph()])
+    mod = seq(mod)
     in_data = np.random.uniform(0, 1, ishape).astype(dtype)
     print(check_result(mod, {
         'input' : in_data
