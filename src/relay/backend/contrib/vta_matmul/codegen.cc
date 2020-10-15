@@ -232,12 +232,16 @@ class VTAMatMulModuleCodegen : public CSourceModuleCodegenBase {
       code_stream_ << "#include <tvm/runtime/c_runtime_api.h>\n";
       code_stream_ << "#include <tvm/runtime/container.h>\n";
       code_stream_ << "#include <tvm/runtime/packed_func.h>\n";
+      code_stream_ << "#include <vta_matmul/vta_matmul_runtime.h>\n";
       code_stream_ << "#include <dlpack/dlpack.h>\n";
       code_stream_ << "using namespace tvm::runtime;\n";
+      code_stream_ << "using namespace tvm::runtime::contrib;\n";
+      code_stream_ << "\n";
 
       const char* ila_code = R"(
         extern "C" void vta_matmul_ila(float* inp, float* weight, float* out, int in_0, int in_1, int w_0) {
           std::cerr << "Called vta_matmul_ila\n";
+          run_vta_simulator(inp, weight, in_0, in_1, w_0, out);
         })";
       // code_stream_ << "using namespace tvm::runtime::contrib;\n";
 
