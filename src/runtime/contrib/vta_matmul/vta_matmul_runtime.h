@@ -9,7 +9,7 @@ namespace tvm {
 namespace runtime {
 namespace contrib {
 
-    void run_vta_simulator(float *acc, float *weight, int in_H, int in_W,
+    extern "C" TVM_DLL void run_vta_simulator(float *acc, float *weight, int in_H, int in_W,
                         int w_W, float *out_buf);
 
 }  //  namespace contrib

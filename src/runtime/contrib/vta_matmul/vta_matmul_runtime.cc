@@ -3,7 +3,7 @@
 namespace tvm {
 namespace runtime {
 namespace contrib {
-    void run_vta_simulator(float *acc, float *weight, int in_H, int in_W,
+    extern "C" TVM_DLL void run_vta_simulator(float *acc, float *weight, int in_H, int in_W,
                         int w_W, float *out_buf) {
         const uint32_t num_instr = 7;
         // LOAD UOP
@@ -27,6 +27,7 @@ namespace contrib {
         float *mem_float = reinterpret_cast<float*>(mem_buf);
         float *wgt_float = reinterpret_cast<float*>(wgt_buf);
         uint8_t *sram_obuf = reinterpret_cast<uint8_t*>(sram_out);
+        std::cerr << "Initializing data" << std::endl;
         for (int i = 0; i < in_H; ++i) {
             for (int j = 0; j < in_W; ++j) {
                 mem_float[i * in_W + j] = acc[i * in_W + j];
@@ -42,6 +43,8 @@ namespace contrib {
         VTAMemInsn *instr_mem = reinterpret_cast<VTAMemInsn*>(instr_buf);
         VTAGemInsn *instr_gem = reinterpret_cast<VTAGemInsn*>(instr_buf);
         VTAAluInsn *instr_alu = reinterpret_cast<VTAAluInsn*>(instr_buf);
+
+        std::cerr << "Define instructions" << std::endl;
 
         VTAUop *uop = new VTAUop;
         uop->dst_idx = 0;
@@ -146,6 +149,8 @@ namespace contrib {
         instr_gem[6].pop_next_dep = 1;
         instr_gem[6].push_prev_dep = 0;
         instr_gem[6].push_next_dep = 0;
+
+        std::cerr << "Run" << std::endl;
 
         VTADeviceRun(device_handle, VTAMemGetPhyAddr(instr_buf), num_instr, 1000);
         for (int i = 0; i < in_H * w_W; ++i) {
