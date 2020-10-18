@@ -19,14 +19,14 @@ if(USE_VTA_MATMUL)
   execute_process(COMMAND ${VTA_CONFIG} --defs OUTPUT_VARIABLE __vta_defs)
 
   string(REGEX MATCHALL "(^| )-D[A-Za-z0-9_=.]*" VTA_DEFINITIONS "${__vta_defs}")
-  # Add fsim driver sources
+  # Add driver sources
   file(GLOB VTA_ILA_RUNTIME_SRCS ${VTA_HW_PATH}/src/*.cc)
   file(GLOB VTA_ILA_RUNTIME_SRCS vta/runtime/*.cc)
   list(APPEND VTA_ILA_RUNTIME_SRCS ${VTA_HW_PATH}/src/sim/sim_driver.cc)
   list(APPEND VTA_ILA_RUNTIME_SRCS ${VTA_HW_PATH}/src/sim/sim_tlpp.cc)
   list(APPEND VTA_ILA_RUNTIME_SRCS ${VTA_HW_PATH}/src/vmem/virtual_memory.cc)
   list(APPEND VTA_ILA_RUNTIME_SRCS src/runtime/contrib/vta_matmul/vta_matmul_runtime.cc)
-  # Target lib: vta_fsim
+  # Target lib: vta_ila
   add_library(vta_ila SHARED ${VTA_ILA_RUNTIME_SRCS})
   target_include_directories(vta_ila SYSTEM PUBLIC ${VTA_HW_PATH}/include)
   foreach(__def ${VTA_DEFINITIONS})
