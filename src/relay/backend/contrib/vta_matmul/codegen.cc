@@ -177,11 +177,14 @@ class CodegenVTA : public MemoizedExprTranslator<std::vector<Output>>, public Co
 
     std::vector<std::string> GetArgumentNames(const CallNode* call) {
       std::vector<std::string> arg_names;
+      std::cerr << "Arg Size: " << call->args.size() << std::endl;
       for (size_t i = 0; i < call->args.size(); ++i) {
         auto res = VisitExpr(call->args[i]);
         for (const auto& out : res) {
           arg_names.push_back(out.name);
+          // std::cerr << out.name << " ";
         }
+        // std::cerr << std::endl;
       }
       return arg_names;
     }
@@ -238,20 +241,17 @@ class VTAMatMulModuleCodegen : public CSourceModuleCodegenBase {
       code_stream_ << "using namespace tvm::runtime::contrib;\n";
       code_stream_ << "\n";
 
-      const char* ila_code = R"(
+      const char* ila_code = R"op_macro(
         extern "C" void vta_matmul_ila(float* inp, float* weight, float* out, int in_0, int in_1, int w_0) {
           std::cerr << "Called vta_matmul_ila\n";
+          std::cerr << "DEBUG: " << inp[0] << std::endl;
           run_vta_simulator(inp, weight, in_0, in_1, w_0, out);
-        })";
+        })op_macro";
       // code_stream_ << "using namespace tvm::runtime::contrib;\n";
 
       code_stream_ << ila_code << "\n";
       auto func = Downcast<Function>(ref);
       auto res = GenVTAFunc(func);
-      code_stream_ << "int main() {\n";
-      code_stream_ << "std::cout << \"Hello from BYOC Codegen\" << std::endl;\n";
-      code_stream_ << "return 0;\n";
-      code_stream_ << "}\n";
       auto code = code_stream_.str();
       String symbol = std::get<0>(res);
       Array<String> vars = std::get<1>(res);
