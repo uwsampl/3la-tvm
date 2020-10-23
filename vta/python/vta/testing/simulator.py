@@ -109,4 +109,15 @@ def debug_mode(flag):
     tvm.get_global_func("vta.simulator.profiler_debug_mode")(flag)
 
 
+def dump_mode(toggle):
+    """Set simulator into dumping mode.
+    Parameters
+    ----------
+    toggle : bool
+        Whether to dump logs and memory instead of executing
+        (false by default)
+    """
+    tvm.get_global_func("vta.simulator.profiler_dump_mode")(1 if toggle else 0)
+
+
 LIBS = _load_sw()
