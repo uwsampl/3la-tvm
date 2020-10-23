@@ -19,6 +19,11 @@ This is a fork of TVM for adding BYOC integrations for the 3LA project.
 
 Right now we have a VTA integration in `src/relay/backend/contrib/vta_matmul`. Note that you have to include the line `SET(USE_VTA_MATMUL ON)` in `build/config.cmake` before building TVM to support this.
 
+This version also uses a fork of the VTA repo meant to dump logs.
+Try `vta/python/integration/matmul_tutorial.py` to use the dumping facility.
+VTA can be set into dumping mode by calling `vta.testing.simulator.dump_mode(True)`.
+See the readme at [the VTA fork](https://github.com/uwsampl/3la-vta) to see a description of the dumping mode and the dumping format.
+
 <img src=https://raw.githubusercontent.com/apache/incubator-tvm-site/main/images/logo/tvm-logo-small.png width=128/> Open Deep Learning Compiler Stack
 ==============================================
 [Documentation](https://tvm.apache.org/docs) |
