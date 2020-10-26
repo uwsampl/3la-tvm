@@ -257,7 +257,6 @@ class VTAMatMulModuleCodegen : public CSourceModuleCodegenBase {
       Array<String> vars = std::get<1>(res);
       const auto* pf = runtime::Registry::Get("runtime.CSourceModuleCreate");
       CHECK(pf != nullptr) << "Cannot find csource module to create the external runtime module";
-      std::cerr << code << std::endl;
       return (*pf)(code, "c", symbol, vars);
     }
   private:
