@@ -108,4 +108,15 @@ def dump_mode(toggle):
     tvm.get_global_func("vta.simulator.profiler_dump_mode")(1 if toggle else 0)
 
 
+def dump_target(target):
+    """Specify address for simulator dump.
+    Parameters
+    ----------
+    target : str
+        Address to which the simulator will write a log
+        and memory dump if dumping mode is on.
+    """
+    tvm.get_global_func("vta.simulator.profiler_dump_target")(target)
+
+
 LIBS = _load_sw()
