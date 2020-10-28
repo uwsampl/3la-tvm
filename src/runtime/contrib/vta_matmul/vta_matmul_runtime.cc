@@ -1,4 +1,5 @@
 #include "vta_matmul_runtime.h"
+#include <cmath>
 
 namespace tvm {
 namespace runtime {
@@ -21,11 +22,13 @@ T ** alloc2dArray(int rows, int cols) {
   return array;
 }
 
-VTAUop* getGEMMUops() {
-  VTAUop *uop_buf = static_cast<VTAUop *>(VTAMemAlloc(sizeof(VTAUop), 0));
-  uop_buf->dst_idx = 0;
-  uop_buf->src_idx = 0;
-  uop_buf->wgt_idx = 0;
+VTAUop* getGEMMUops(int batch, int in_channels, int out_channels) {
+  VTAUop *uop_buf = static_cast<VTAUop *>(VTAMemAlloc(sizeof(VTAUop) * batch, 0));
+  for (int i = 0; i < batch; ++i) {
+    uop_buf[i].dst_idx = i * out_channels;
+    uop_buf[i].src_idx = i * in_channels;
+    uop_buf[i].wgt_idx = 0;
+  }
   return uop_buf;
 }
 
@@ -213,9 +216,29 @@ void copyData(T* dst, float* src, int h, int w) {
   }
 }
 
+template<typename T>
+void resetVal(T* dst, T v, int h, int w) {
+  for (int i = 0; i < h; ++i) {
+    for (int j = 0; j < w; ++j) {
+      dst[i * w + j] = v;
+    }
+  }
+}
+
+template<typename T>
+/**
+ * Copy the `r_src`th row of `src` to `r_dst`th row of `dst`
+ * */
+void copyRow(T* dst, float* src, int r_dst, int w_dst, int r_src, int w_src) {
+  assert(w_src <= w_dst);
+  for (int i = 0; i < w_src; ++i) {
+    dst[r_dst * w_dst + i] = (int)round(src[r_src * w_src + i]);
+  }
+}
+
 extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch, int in_channels,
                                           int out_channels, float* out_buf) {
-  const uint32_t num_instr = 7;
+  const uint32_t num_instr = 256;
   std::cerr << "in_W: " << in_channels << " "
             << "in_H: " << batch << "\n";
   std::cerr << "w_H: " << out_channels << std::endl;
@@ -233,7 +256,7 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
   //   }
   //   std::cerr << "\n";
   // }
-  int uop_size = sizeof(VTAUop);
+  int uop_size = sizeof(VTAUop) * 16;
   int inp_size = 16;
   int wgt_size = 16;
   int out_size = 16;
@@ -252,7 +275,7 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
   // inp_T** inputs = allocInit2dArray<inp_T>(batch, in_channels, 1, input);
   // wgt_T** weights = allocInit2dArray<wgt_T>(out_channels, in_channels, 1, weight);
   // acc_T** bias = allocInit2dArray<acc_T>(batch, out_channels, 0, nullptr, 0);
-  VTAUop* uops = getGEMMUops();
+  VTAUop* uops = getGEMMUops(batch, in_channels, out_channels);
 
   std::cerr << "Inp Size: " << inp_size << " " << "ELEM BYTES: " << VTA_INP_ELEM_BYTES << std::endl;
   std::cerr << "Wgt Size: " << wgt_size << "\n";
@@ -268,13 +291,14 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
   //   }
   //   std::cerr << "\n";
   // }
-  for (int i = 0; i < batch; ++i) {
-    for (int j = 0; j < in_channels; ++j) {
-      input_buf[i * in_channels + j] = 1;
+  resetVal<int8_t>(input_buf, 1, batch, in_channels);
+  // for (int i = 0; i < batch; ++i) {
+  //   for (int j = 0; j < in_channels; ++j) {
+  //     input_buf[i * in_channels + j] = 1;
       // std::cerr << static_cast<int>(input[i * in_channels + j]) << " ";
-    }
-    std::cerr << "\n";
-  }
+    // }
+    // std::cerr << "\n";
+  // }
   int8_t* wgt_buf = static_cast<int8_t*>(allocBuffer(VTA_WGT_ELEM_BYTES * wgt_size * wgt_size));
   copyData<int8_t>(wgt_buf, weight, out_channels, in_channels);
   // packBuffer<uint32_t, 32, out_T, VTA_WGT_WIDTH>(wgt_buf, weights, out_channels, in_channels,
@@ -295,62 +319,88 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
 
   int ptr = 0;
 
-  instr_buf[ptr++] = get1DLoadStoreInsn(
-    VTA_OPCODE_LOAD,
-    VTA_MEM_ID_UOP,
-    0,
-    VTAMemGetPhyAddr(uops) / VTA_UOP_ELEM_BYTES,
-    uop_size,
-    0, 0, 0, 0
-  );
+  // instr_buf[ptr++] = get1DLoadStoreInsn(
+  //   VTA_OPCODE_LOAD,
+  //   VTA_MEM_ID_UOP,
+  //   0,
+  //   VTAMemGetPhyAddr(uops) / VTA_UOP_ELEM_BYTES,
+  //   sizeof(VTAUop),
+  //   0, 0, 0, 0
+  // );
 
   instr_buf[ptr++] = get2DLoadStoreInsn(
-    VTA_OPCODE_LOAD, // op_code
-    VTA_MEM_ID_ACC,  // type
-    0,               // sram base
-    VTAMemGetPhyAddr(bias_buf) / VTA_ACC_ELEM_BYTES, // dram base
-    out_size, // y_size
-    out_size, // x_size
-    out_size, // x_stride
-    0,        // y pad
-    0,        // x_pad
-    0, 0, 1, 0
-  );
+      VTA_OPCODE_LOAD, // op_code
+      VTA_MEM_ID_ACC,  // type
+      0,               // sram base
+      VTAMemGetPhyAddr(bias_buf) / VTA_ACC_ELEM_BYTES, // dram base
+      out_size, // y_size
+      out_size, // x_size
+      out_size, // x_stride
+      0,        // y pad
+      0,        // x_pad
+      0, 0, 1, 0
+    );
 
   instr_buf[ptr++] = get2DLoadStoreInsn(
     VTA_OPCODE_LOAD,
     VTA_MEM_ID_WGT,
     0,
     VTAMemGetPhyAddr(wgt_buf) / VTA_WGT_ELEM_BYTES,
-    16,
-    16,
-    16,
+    wgt_size,
+    wgt_size,
+    wgt_size,
     0,
     0,
     0, 1, 0, 0
   );
+  std::vector<void*> allocated_inp;
+  for (int i = 0; i < batch; ++i) {
+    int8_t* ibuf = static_cast<int8_t*>(allocBuffer(VTA_INP_ELEM_BYTES * inp_size * inp_size));
+    resetVal<int8_t>(ibuf, 0, batch, in_channels);
+    copyRow<int8_t>(ibuf, input, 0, in_channels, i, in_channels);
+    for (int i = 0; i < in_channels; ++i) {
+      std::cerr << (int)ibuf[i] << " ";
+    }
+    std::cerr << "\n";
+    allocated_inp.push_back(input_buf);
 
-  instr_buf[ptr++] = get2DLoadStoreInsn(
-    VTA_OPCODE_LOAD,
-    VTA_MEM_ID_INP,
-    0,
-    VTAMemGetPhyAddr(input_buf) / VTA_INP_ELEM_BYTES,
-    inp_size,
-    inp_size,
-    inp_size,
-    0,
-    0,
-    0, 0, 0, 1
-  );
+    VTAUop* uop = reinterpret_cast<VTAUop*>(VTAMemAlloc(sizeof(VTAUop), 0));
+    uop->dst_idx = i * out_channels;
+    uop->src_idx = 0;
+    uop->wgt_idx = 0;
+    allocated_inp.push_back(uop);
 
-  instr_buf[ptr++] = getGEMMInsn(
-    0,
-    batch / VTA_BATCH,
-    in_channels / VTA_BLOCK_IN,
-    out_channels / VTA_BLOCK_OUT,
-    1,
-    1, 0, 0, 1
-  );
+    instr_buf[ptr++] = get2DLoadStoreInsn(
+      VTA_OPCODE_LOAD,
+      VTA_MEM_ID_INP,
+      0,
+      VTAMemGetPhyAddr(ibuf) / VTA_INP_ELEM_BYTES,
+      inp_size,
+      inp_size,
+      inp_size,
+      0,
+      0,
+      0, i > 0, 0, 1 // pop prev | pop next | push prev | push next
+    );
+    
+    instr_buf[ptr++] = get1DLoadStoreInsn(
+      VTA_OPCODE_LOAD,
+      VTA_MEM_ID_UOP,
+      0,
+      VTAMemGetPhyAddr(uop) / VTA_UOP_ELEM_BYTES,
+      sizeof(VTAUop),
+      1, 0, 0, 0
+    );
+
+    instr_buf[ptr++] = getGEMMInsn(
+      0,
+      batch / VTA_BATCH,
+      in_channels / VTA_BLOCK_IN,
+      out_channels / VTA_BLOCK_OUT,
+      1,
+      0, 0, 1, i + 1 == out_channels
+    );
+  }
 
   instr_buf[ptr++] = get2DLoadStoreInsn(
     VTA_OPCODE_STORE,
@@ -369,7 +419,7 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
 
   std::cerr << "Run" << std::endl;
 
-  VTADeviceRun(device_handle, VTAMemGetPhyAddr(instr_buf), num_instr, 1000);
+  VTADeviceRun(device_handle, VTAMemGetPhyAddr(instr_buf), ptr, 1000);
 
   // out_T **outputs = alloc2dArray<out_T>(batch, out_channels);
   // unpackBuffer<out_T, VTA_OUT_WIDTH, uint32_t, 32>(outputs,
@@ -392,6 +442,9 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
   }
   VTAMemFree(input_buf);
   VTAMemFree(output_buf);
+  for (auto x : allocated_inp) {
+    VTAMemFree(x);
+  }
   VTAMemFree(wgt_buf);
   VTAMemFree(instr_buf);
   VTADeviceFree(device_handle);
