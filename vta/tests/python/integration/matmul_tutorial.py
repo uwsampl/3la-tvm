@@ -433,6 +433,7 @@ C_nd = tvm.nd.array(np.zeros((o, m, env.BATCH, env.BLOCK_OUT)).astype(C.dtype), 
 # Clear stats
 if env.TARGET in ["sim", "tsim"]:
     simulator.dump_mode(True)
+    simulator.dump_target("test.json")
     simulator.clear_stats()
 
 # Invoke the module to perform the computation

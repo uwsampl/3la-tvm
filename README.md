@@ -22,6 +22,7 @@ Right now we have a VTA integration in `src/relay/backend/contrib/vta_matmul`. N
 This version also uses a fork of the VTA repo meant to dump logs.
 Try `vta/python/integration/matmul_tutorial.py` to use the dumping facility.
 VTA can be set into dumping mode by calling `vta.testing.simulator.dump_mode(True)`.
+You can specify the location at which the dump will be deposited using `vta.testing.simulator.dump_target(path)`; the default is `./vta_sim_dump.json`.
 See the readme at [the VTA fork](https://github.com/uwsampl/3la-vta) to see a description of the dumping mode and the dumping format.
 
 <img src=https://raw.githubusercontent.com/apache/incubator-tvm-site/main/images/logo/tvm-logo-small.png width=128/> Open Deep Learning Compiler Stack
