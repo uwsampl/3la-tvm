@@ -52,7 +52,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
       LOG(FATAL) << "ILAVTA runtime does not support calls to "
                  << cn->op->GetTypeKey();
     }
-    LOG(INFO) << "[3LA] Found annotated: " << name;
+    LOG(INFO) << "[Pattern Matching] Find annotated: " << name;
 
     std::vector<JSONGraphNodeEntry> inputs;
     for (const auto& arg : cn->args) {
