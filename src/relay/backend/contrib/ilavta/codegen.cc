@@ -32,7 +32,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
   std::vector<JSONGraphNodeEntry> VisitExpr_(const CallNode* cn) override {
     Expr expr = GetRef<Expr>(cn);
     std::string name;
-    // const CallNode* call = cn;
+
     if (const auto* op_node = cn->op.as<OpNode>()) {
       name = op_node->name;
     } else if (const auto* fn = cn->op.as<FunctionNode>()) {
@@ -42,9 +42,9 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
       name = comp.value();
 
       if (name == "ilavta.conv2d") {
-        // TODO
+        //
       } else if (name == "ilavta.batch_matmul") {
-        // TODO
+        //
       } else {
         LOG(FATAL) << "Unrecognized pattern: " << name;
       }
@@ -52,7 +52,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
       LOG(FATAL) << "ILAVTA runtime does not support calls to "
                  << cn->op->GetTypeKey();
     }
-    LOG(INFO) << "Visiting " << name;
+    LOG(INFO) << "[3LA] Found annotated: " << name;
 
     std::vector<JSONGraphNodeEntry> inputs;
     for (const auto& arg : cn->args) {
