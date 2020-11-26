@@ -22,7 +22,7 @@ import math
 VIR_MEM_MODES = {
     'INP': 1,
     'WGT': 2,
-    'BIAS': 3,
+    'ACC': 3,
     'UOP': 4
 }
 
@@ -178,9 +178,8 @@ def generate_dram_insns(sim_dump, insn_idx):
         for i, byte in enumerate(dump['bytes']):
             if byte == '0xXX':
                 continue
-            offset_addr = addr + i
             ret.append(create_ila_dram_insn(
-                mem_type, format(offset_addr, '#010x'), byte, insn_idx))
+                mem_type, addr + i, byte, insn_idx))
             insn_idx += 1
     return ret
 
@@ -227,7 +226,7 @@ def convert(src_path, dest_path):
     memory_insns = generate_dram_insns(source, 0)
     prog_insns = convert_prog_insns(source, len(memory_insns))
 
-    prog_frag = {'program_fragment': memory_insns + prog_insns}
+    prog_frag = {'program fragment': memory_insns + prog_insns}
 
     with open(dest_path, 'w') as f:
         json.dump(prog_frag, f, indent=4)
