@@ -23,7 +23,7 @@ VIR_MEM_MODES = {
     'INP': 1,
     'WGT': 2,
     'ACC': 3,
-    'UOP': 4,
+    'UOP': 4
 }
 
 LITTLE_ENDIAN = True
@@ -178,9 +178,8 @@ def generate_dram_insns(sim_dump, insn_idx):
         for i, byte in enumerate(dump['bytes']):
             if byte == '0xXX':
                 continue
-            offset_addr = addr + i
             ret.append(create_ila_dram_insn(
-                mem_type, format(offset_addr, '#010x'), byte, insn_idx))
+                mem_type, addr + i, byte, insn_idx))
             insn_idx += 1
     return ret
 
