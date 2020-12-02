@@ -23,7 +23,7 @@ VIR_MEM_MODES = {
     'INP': 1,
     'WGT': 2,
     'ACC': 3,
-    'UOP': 4
+    'UOP': 4,
 }
 
 LITTLE_ENDIAN = True
@@ -109,7 +109,7 @@ def ila_instruction(
     return {
         'instr No.': insn_idx,
         'instr_in': instr_in,
-        'mem_addr': mem_addr,
+        'mem_addr': int(mem_addr, base=16) if isinstance(mem_addr, str) and mem_addr.startswith('0x') else int(mem_addr),
         'mem_bias_in': mem_bias_in,
         'mem_inp_in': mem_inp_in,
         'mem_mode': mem_mode,
