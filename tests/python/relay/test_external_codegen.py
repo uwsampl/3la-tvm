@@ -18,6 +18,7 @@
 
 import sys
 from collections import OrderedDict
+import json
 import numpy as np
 import pytest
 
@@ -358,20 +359,23 @@ def test_extern_vta():
     if not tvm.get_global_func("relay.ext.vta_matmul", True):
         print('VTA ILA codegen not supported')
 
+    vta.testing.simulator.dump_mode(True)
+    # tvm.get_global_func("vta.simulator.profiler_dump_mode")(1)
     dtype = 'float32'
-    ishape = (3, 24)
-    wshape = (5, 24)
+    ishape = (16, 16)
+    wshape = (16, 16)
 
     data = relay.var('data', shape=(ishape), dtype=dtype)
-    weight = relay.const(np.random.uniform(0, 1, wshape).astype(dtype), dtype=dtype)
+    weight = relay.var('weight', shape=(wshape), dtype=dtype)
 
     data_1 = relay.log(data)
-    o1 = relay.multiply(data_1, relay.const(np.random.uniform(0, 1, ishape)))
+    o1 = relay.multiply(data_1, relay.const(np.random.uniform(1, 1, ishape)))
 
     out = relay.nn.dense(o1, weight) # relay.Call(dense_func, [o1])
-    f = relay.Function([data], out)
+    f = relay.Function([data, weight], out)
     inputs = relay.var('input', shape=ishape, dtype=dtype)
-    call = relay.Call(f, [inputs])
+    weights = relay.var('w', shape=wshape, dtype=dtype)
+    call = relay.Call(f, [inputs, weights])
 
     mod = tvm.IRModule()
     mod['main'] = f
@@ -380,10 +384,16 @@ def test_extern_vta():
     seq = tvm.transform.Sequential([transform.AnnotateTarget('vta_matmul'),
                                     transform.PartitionGraph()])
     mod = seq(mod)
-    in_data = np.random.uniform(0, 1, ishape).astype(dtype)
-    print(check_result(mod, {
-        'input' : in_data
-    }, (3, 5), np.random.uniform(0, 1, (3, 5)).astype(dtype)))
+    import math
+    # in_data = np.random.uniform(1, 1, ishape).astype(dtype)
+    in_data = np.array([math.e] * ishape[0] * ishape[1]).reshape(ishape).astype(dtype)
+    # w_data = np.random.uniform(1, 1, wshape).astype(dtype)
+    w_data = (np.arange(wshape[0] * wshape[1]) % 10).reshape(wshape).astype(dtype)
+    check_result(mod, {
+        'input' : in_data,
+        'w': w_data
+    }, (16, 16), np.matmul(np.array([1] * 16 * 16).reshape(ishape).astype(dtype),
+                 np.transpose(w_data)).astype(dtype), use_graph_rt=False)
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__] + sys.argv[1:]))
