@@ -22,8 +22,8 @@ import math
 VIR_MEM_MODES = {
     'INP': 1,
     'WGT': 2,
-    'BIAS': 3,
-    'UOP': 4
+    'ACC': 3,
+    'UOP': 4,
 }
 
 LITTLE_ENDIAN = True
@@ -109,7 +109,7 @@ def ila_instruction(
     return {
         'instr No.': insn_idx,
         'instr_in': instr_in,
-        'mem_addr': mem_addr,
+        'mem_addr': int(mem_addr, base=16) if isinstance(mem_addr, str) and mem_addr.startswith('0x') else int(mem_addr),
         'mem_bias_in': mem_bias_in,
         'mem_inp_in': mem_inp_in,
         'mem_mode': mem_mode,
@@ -227,7 +227,7 @@ def convert(src_path, dest_path):
     memory_insns = generate_dram_insns(source, 0)
     prog_insns = convert_prog_insns(source, len(memory_insns))
 
-    prog_frag = {'program_fragment': memory_insns + prog_insns}
+    prog_frag = {'program fragment': memory_insns + prog_insns}
 
     with open(dest_path, 'w') as f:
         json.dump(prog_frag, f, indent=4)
