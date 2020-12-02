@@ -17,6 +17,7 @@
 """Unit tests for graph partitioning."""
 import os
 import sys
+import json
 import numpy as np
 
 import tvm
@@ -27,20 +28,31 @@ from tvm import relay
 from tvm.relay import transform
 from tvm import runtime
 from tvm.contrib import util
+import vta
+import vta.testing
 
 
-def check_result(mod, map_inputs, out_shape, result, tol=1e-5, target="llvm", ctx=tvm.cpu()):
+def check_result(mod, map_inputs, out_shape, result, tol=1e-5, target="llvm", ctx=tvm.cpu(), use_graph_rt=True):
     if sys.platform == "win32":
         print("Skip test on Windows for now")
         return
 
     def update_lib(lib):
+        vta_hw_path = os.environ['VTA_HW_PATH']
+        tvm_home = os.environ['TVM_HOME']
         test_dir = os.path.dirname(os.path.realpath(os.path.expanduser(__file__)))
         source_dir = os.path.join(test_dir, "..", "..", "..")
-        contrib_path = os.path.join(source_dir, "src", "runtime", "contrib")
-
+        vta_config = json.load(open('/' + os.path.join(*(vta_hw_path.split(os.path.sep) + ['config', 'vta_config.json']))))
+        
         kwargs = {}
-        kwargs["options"] = ["-O2", "-std=c++14", "-I" + contrib_path]
+        kwargs["options"] = ["-O2", "-std=c++14",
+                             f"-L{tvm_home}/build", 
+                             "-lvta_fsim",
+                             f'-I{tvm_home}/src/runtime/contrib',
+                             f"-I{tvm_home}/3rdparty/vta-hw/include"] \
+                          + [f'-D{"VTA_" + x}={y}' for (x, y) in filter(lambda pi: 'LOG' in pi[0], vta_config.items())]
+        kwargs["options"].append(f'-DVTA_LOG_BLOCK_IN={vta_config["LOG_BLOCK"]}')
+        kwargs["options"].append(f'-DVTA_LOG_BLOCK_OUT={vta_config["LOG_BLOCK"]}')
         tmp_path = util.tempdir()
         lib_name = "lib.so"
         lib_path = tmp_path.relpath(lib_name)
@@ -74,7 +86,8 @@ def check_result(mod, map_inputs, out_shape, result, tol=1e-5, target="llvm", ct
         tvm.testing.assert_allclose(out.asnumpy(), result, rtol=tol, atol=tol)
 
     check_vm_result()
-    check_graph_runtime_result()
+    if use_graph_rt:
+        check_graph_runtime_result()
 
 
 def set_external_func_attr(func, compiler, ext_symbol):
@@ -300,20 +313,23 @@ def test_extern_vta():
     if not tvm.get_global_func("relay.ext.vta_matmul", True):
         print('VTA ILA codegen not supported')
 
+    vta.testing.simulator.dump_mode(True)
+    # tvm.get_global_func("vta.simulator.profiler_dump_mode")(1)
     dtype = 'float32'
-    ishape = (3, 24)
-    wshape = (5, 24)
+    ishape = (16, 16)
+    wshape = (16, 16)
 
     data = relay.var('data', shape=(ishape), dtype=dtype)
-    weight = relay.const(np.random.uniform(0, 1, wshape).astype(dtype), dtype=dtype)
+    weight = relay.var('weight', shape=(wshape), dtype=dtype)
 
     data_1 = relay.log(data)
-    o1 = relay.multiply(data_1, relay.const(np.random.uniform(0, 1, ishape)))
+    o1 = relay.multiply(data_1, relay.const(np.random.uniform(1, 1, ishape)))
 
     out = relay.nn.dense(o1, weight) # relay.Call(dense_func, [o1])
-    f = relay.Function([data], out)
+    f = relay.Function([data, weight], out)
     inputs = relay.var('input', shape=ishape, dtype=dtype)
-    call = relay.Call(f, [inputs])
+    weights = relay.var('w', shape=wshape, dtype=dtype)
+    call = relay.Call(f, [inputs, weights])
 
     mod = tvm.IRModule()
     mod['main'] = f
@@ -322,10 +338,16 @@ def test_extern_vta():
     seq = tvm.transform.Sequential([transform.AnnotateTarget('vta_matmul'),
                                     transform.PartitionGraph()])
     mod = seq(mod)
-    in_data = np.random.uniform(0, 1, ishape).astype(dtype)
-    print(check_result(mod, {
-        'input' : in_data
-    }, (3, 5), np.random.uniform(0, 1, (3, 5)).astype(dtype)))
+    import math
+    # in_data = np.random.uniform(1, 1, ishape).astype(dtype)
+    in_data = np.array([math.e] * ishape[0] * ishape[1]).reshape(ishape).astype(dtype)
+    # w_data = np.random.uniform(1, 1, wshape).astype(dtype)
+    w_data = (np.arange(wshape[0] * wshape[1]) % 10).reshape(wshape).astype(dtype)
+    check_result(mod, {
+        'input' : in_data,
+        'w': w_data
+    }, (16, 16), np.matmul(np.array([1] * 16 * 16).reshape(ishape).astype(dtype),
+                 np.transpose(w_data)).astype(dtype), use_graph_rt=False)
 
 if __name__ == "__main__":
     test_multi_node_subgraph()
