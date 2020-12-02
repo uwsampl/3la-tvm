@@ -18,6 +18,7 @@
 import os
 import sys
 import json
+import math
 import numpy as np
 
 import tvm
@@ -347,7 +348,6 @@ def test_extern_vta():
         print('VTA ILA codegen not supported')
 
     vta.testing.simulator.dump_mode(True)
-    # tvm.get_global_func("vta.simulator.profiler_dump_mode")(1)
     dtype = 'float32'
     ishape = (16, 16)
     wshape = (16, 16)
@@ -371,10 +371,7 @@ def test_extern_vta():
     seq = tvm.transform.Sequential([transform.AnnotateTarget('vta_matmul'),
                                     transform.PartitionGraph()])
     mod = seq(mod)
-    import math
-    # in_data = np.random.uniform(1, 1, ishape).astype(dtype)
     in_data = np.array([math.e] * ishape[0] * ishape[1]).reshape(ishape).astype(dtype)
-    # w_data = np.random.uniform(1, 1, wshape).astype(dtype)
     w_data = (np.arange(wshape[0] * wshape[1]) % 10).reshape(wshape).astype(dtype)
     check_result(mod, {
         'input' : in_data,
