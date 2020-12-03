@@ -17,7 +17,7 @@
 
 This is a fork of TVM for adding BYOC integrations for the 3LA project.
 
-Right now we have a VTA integration in `src/relay/backend/contrib/vta_matmul`. Note that you have to include the line `SET(USE_VTA_MATMUL ON)` in `build/config.cmake` before building TVM to support this.
+Right now we have a VTA integration in `src/relay/backend/contrib/vta_matmul`. Note that you have to include the line `SET(USE_VTA_MATMUL ON)` in `build/config.cmake` before building TVM to support this. We have a test of this backend in `tests/python/relay/test_external_codegen.py` (see `test_extern_vta()`).
 
 This version also uses a fork of the VTA repo meant to dump logs.
 Try `vta/python/integration/matmul_tutorial.py` to use the dumping facility.
