@@ -509,7 +509,8 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
   // std::cerr << "Define instructions" << std::endl;
 
   int ptr = 0;
-
+  // We do not write 0s to the ACC buffer since it is initally 0
+  // This will reduce the length of translated ILA program fragment
   /* instr_buf[ptr++] = get2DLoadStoreInsn(
       VTA_OPCODE_LOAD, // op_code
       VTA_MEM_ID_ACC,  // type
