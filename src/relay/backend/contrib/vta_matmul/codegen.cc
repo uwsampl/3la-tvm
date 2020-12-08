@@ -510,7 +510,7 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
 
   int ptr = 0;
 
-  instr_buf[ptr++] = get2DLoadStoreInsn(
+  /* instr_buf[ptr++] = get2DLoadStoreInsn(
       VTA_OPCODE_LOAD, // op_code
       VTA_MEM_ID_ACC,  // type
       0,               // sram base
@@ -521,7 +521,7 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
       0,        // y pad
       0,        // x_pad
       0, 0, 1, 0
-    );
+    ); */
 
   instr_buf[ptr++] = get2DLoadStoreInsn(
     VTA_OPCODE_LOAD,
@@ -533,7 +533,7 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
     in_channels,
     0,
     0,
-    0, 1, 0, 0
+    0, 0, 0, 0
   );
   std::vector<void*> allocated_inp;
   for (int i = 0; i < batch; ++i) {
