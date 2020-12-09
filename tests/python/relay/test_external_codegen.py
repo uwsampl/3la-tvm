@@ -45,6 +45,10 @@ def check_result(mod, map_inputs, out_shape, result, tol=1e-5, target="llvm", ct
         source_dir = os.path.join(test_dir, "..", "..", "..")
         vta_config = json.load(open('/' + os.path.join(*(vta_hw_path.split(os.path.sep) + ['config', 'vta_config.json']))))
         
+        vta_config['LOG_BLOCK_IN'] = vta_config['LOG_BLOCK']
+        vta_config['LOG_BLOCK_OUT'] = vta_config['LOG_BLOCK']
+        vta_config['LOG_OUT_WIDTH'] = vta_config['LOG_INP_WIDTH']
+        vta_config['LOG_OUT_BUFF_SIZE'] = vta_config['LOG_ACC_BUFF_SIZE'] + vta_config['LOG_OUT_WIDTH'] - vta_config['LOG_ACC_WIDTH']
         kwargs = {}
         kwargs["options"] = ["-O2", "-std=c++14",
                              f"-L{tvm_home}/build", 
