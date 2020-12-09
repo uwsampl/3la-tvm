@@ -509,9 +509,12 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
   // std::cerr << "Define instructions" << std::endl;
 
   int ptr = 0;
-  // We do not write 0s to the ACC buffer since it is initally 0
+  // In principle, we can get rid of writting
+  // 0s to the ACC buffer since it is initally 0
   // This will reduce the length of translated ILA program fragment
-  /* instr_buf[ptr++] = get2DLoadStoreInsn(
+  // However, there are chances that resulting output can go wrong
+  // Keep it for now
+  instr_buf[ptr++] = get2DLoadStoreInsn(
       VTA_OPCODE_LOAD, // op_code
       VTA_MEM_ID_ACC,  // type
       0,               // sram base
@@ -522,7 +525,7 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
       0,        // y pad
       0,        // x_pad
       0, 0, 1, 0
-    ); */
+    );
 
   instr_buf[ptr++] = get2DLoadStoreInsn(
     VTA_OPCODE_LOAD,
@@ -534,7 +537,7 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
     in_channels,
     0,
     0,
-    0, 0, 0, 0
+    0, 1, 0, 0
   );
   std::vector<void*> allocated_inp;
   for (int i = 0; i < batch; ++i) {
