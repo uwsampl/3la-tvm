@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 """Converts a VTA simulator JSON dump into an ILA instruction trace"""
-import ctypes
+import sys
 import json
 import math
 
@@ -27,6 +27,19 @@ VIR_MEM_MODES = {
 }
 
 LITTLE_ENDIAN = True
+
+def combine_bytes(bytes):
+    """
+    Given an array of bytes (as hex strings),
+    returns a single hex string that combines the bytes
+    into a single integer (based on the endianness set above)
+    """
+    digit_strs = [byte.split('x')[1] for byte in bytes]
+    # if the integer is little endian, then the first bytes are the last digits
+    if LITTLE_ENDIAN:
+        digit_strs = digit_strs[::-1]
+    return '0x{}'.format(''.join(digit_strs))
+
 
 def hex_string_to_bytes(hex_string):
     digits = hex_string.split('x')[1]
@@ -101,7 +114,7 @@ def reconstitute_mem_insn(
 
 
 def ila_instruction(
-        insn_idx=0, instr_in='0x00', mem_addr=0,
+        insn_idx=0, instr_in='0x00', mem_idx=0,
         mem_bias_in='0x00', mem_inp_in='0x00',
         mem_mode=0,
         mem_uop_in='0x00', mem_wgt_in='0x00'):
@@ -109,7 +122,7 @@ def ila_instruction(
     return {
         'instr No.': insn_idx,
         'instr_in': instr_in,
-        'mem_addr': int(mem_addr, base=16) if isinstance(mem_addr, str) and mem_addr.startswith('0x') else int(mem_addr),
+        'mem_idx': int(mem_idx, base=16) if isinstance(mem_idx, str) and mem_idx.startswith('0x') else int(mem_idx),
         'mem_bias_in': mem_bias_in,
         'mem_inp_in': mem_inp_in,
         'mem_mode': mem_mode,
@@ -118,14 +131,12 @@ def ila_instruction(
     }
 
 
-def create_ila_dram_insn(target, addr, data, insn_idx):
+def create_ila_dram_insn(target, mem_idx, data, insn_idx):
     if target not in VIR_MEM_MODES:
         raise Exception(f'Invalid target: {target}')
 
     vir_mem_mode = VIR_MEM_MODES[target]
 
-    # read in a single byte xx in hex, present as
-    # 0xffffffxx
     if data == '0xXX':
         raise Exception(f'Attempting to write padding value at addr {addr}')
 
@@ -133,20 +144,14 @@ def create_ila_dram_insn(target, addr, data, insn_idx):
     # however, if we use the same one in every field, that is sufficient
     return ila_instruction(
         insn_idx=insn_idx, mem_mode=vir_mem_mode,
-        mem_addr=addr,
+        mem_idx=mem_idx,
         mem_bias_in=data, mem_inp_in=data,
         mem_uop_in=data, mem_wgt_in=data)
 
 
 def create_ila_vta_insn(insn_bytes, insn_idx):
-    # we combine the instruction bytes into a single 128-bit integer
-    digit_strs = [byte.split('x')[1] for byte in insn_bytes]
-    # if the integer is little endian, then the first bytes are the last digits
-    if LITTLE_ENDIAN:
-        digit_strs = digit_strs[::-1]
-    insn_str = '0x{}'.format(''.join(digit_strs))
     return ila_instruction(insn_idx=insn_idx,
-                           instr_in=insn_str)
+                           instr_in=combine_bytes(insn_bytes))
 
 
 def generate_dram_insns(sim_dump, insn_idx):
@@ -167,6 +172,7 @@ def generate_dram_insns(sim_dump, insn_idx):
     """
     dram_dumps = sim_dump['dram']
     ret = []
+
     for dump in dram_dumps:
         mem_type = dump['context']
         # the ILA does not need a dump of the instructions
@@ -174,13 +180,38 @@ def generate_dram_insns(sim_dump, insn_idx):
             continue
         if mem_type == 'unknown':
             raise Exception('Unknown memory type encountered')
-        addr = int(dump['start_addr'], 16)
+
+        data_width = dump['data_width']
+        dram_byte_addr = int(dump['start_addr'], 16)
+        mem_idx = dram_byte_addr/data_width
+
+        # collect an element at a time,
+        # skipping any padding bytes
+        current_value = []
         for i, byte in enumerate(dump['bytes']):
-            if byte == '0xXX':
+            current_value.append(byte)
+            if len(current_value) < data_width:
                 continue
-            ret.append(create_ila_dram_insn(
-                mem_type, addr + i, byte, insn_idx))
+
+            # We have collected a full value, so create a DRAM instruction.
+
+            # Handling padding bytes: check that a value is either all padding (treat as all 0's)
+            # or no padding at all
+            is_padding = ('0xXX' in current value)
+            if is_padding:
+                assert all(map(lambda x: x == '0xXX', current_value))
+
+            if not is_padding:
+                ret.append(
+                    create_ila_dram_insn(
+                        mem_type, mem_idx,
+                        combine_bytes(current_value), insn_idx
+                    )
+                )
+            mem_idx += 1
             insn_idx += 1
+            current_value = []
+
     return ret
 
 
