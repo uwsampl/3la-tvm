@@ -433,7 +433,8 @@ C_nd = tvm.nd.array(np.zeros((o, m, env.BATCH, env.BLOCK_OUT)).astype(C.dtype), 
 # Clear stats
 if env.TARGET in ["sim", "tsim"]:
     simulator.dump_mode(True)
-    simulator.dump_target("test.json")
+    simulator.sim_dump_target("test_sim.json")
+    simulator.output_dump_target("test_output.json")
     simulator.clear_stats()
 
 # Invoke the module to perform the computation
@@ -447,23 +448,18 @@ f(A_nd, B_nd, C_nd)
 
 # Compute reference result with numpy
 
-###################################################
-# Commented out because if dumping mode is on,    #
-# the model will not actually execute.            #
-###################################################
+C_ref = np.dot(A_orig.astype(env.acc_dtype), B_orig.T.astype(env.acc_dtype)).astype(C.dtype)
+C_ref = C_ref.reshape(o, env.BATCH, m, env.BLOCK_OUT).transpose((0, 2, 1, 3))
+np.testing.assert_equal(C_ref, C_nd.asnumpy())
 
-# C_ref = np.dot(A_orig.astype(env.acc_dtype), B_orig.T.astype(env.acc_dtype)).astype(C.dtype)
-# C_ref = C_ref.reshape(o, env.BATCH, m, env.BLOCK_OUT).transpose((0, 2, 1, 3))
-# np.testing.assert_equal(C_ref, C_nd.asnumpy())
+# Print stats
+if env.TARGET in ["sim", "tsim"]:
+    sim_stats = simulator.stats()
+    print("Execution statistics:")
+    for k, v in sim_stats.items():
+        print("\t{:<16}: {:>16}".format(k, v))
 
-# # Print stats
-# if env.TARGET in ["sim", "tsim"]:
-#     sim_stats = simulator.stats()
-#     print("Execution statistics:")
-#     for k, v in sim_stats.items():
-#         print("\t{:<16}: {:>16}".format(k, v))
-
-# print("Successful matrix multiply test!")
+print("Successful matrix multiply test!")
 
 ######################################################################
 # Summary
