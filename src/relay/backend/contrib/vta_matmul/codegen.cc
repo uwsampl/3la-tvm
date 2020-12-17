@@ -527,6 +527,8 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
       0, 0, 1, 0
     );
 
+  // Load the weight matrix to weight buffer
+  // Need to wait until the previous LOAD to complete
   instr_buf[ptr++] = get2DLoadStoreInsn(
     VTA_OPCODE_LOAD,
     VTA_MEM_ID_WGT,
@@ -540,6 +542,10 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
     0, 1, 0, 0
   );
   std::vector<void*> allocated_inp;
+  // Loop through the input row by row
+  // Assume the weight buffer is transposed so that
+  // we only need to do a vector-matrix dot between each row and the weight matrix
+  // Note that the output is also transposed
   for (int i = 0; i < batch; ++i) {
     int8_t* ibuf = static_cast<int8_t*>(allocBuffer(VTA_INP_ELEM_BYTES * batch * in_channels));
     resetVal<int8_t>(ibuf, 0, batch, in_channels);
@@ -551,7 +557,10 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
     uop->src_idx = 0;
     uop->wgt_idx = 0;
     allocated_inp.push_back(uop);
-
+    
+    // Load the ith row to the first row of the input buffer
+    // Need to wait GEMM instruction if there is a running one (i > 0)
+    // Need to block GEMM instruction (actually LOAD UOP) if it starts loading data
     instr_buf[ptr++] = get2DLoadStoreInsn(
       VTA_OPCODE_LOAD,
       VTA_MEM_ID_INP,
@@ -564,7 +573,10 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
       0,
       0, i > 0, 0, 1 // pop prev | pop next | push prev | push next
     );
-    
+   
+    // Load UOP
+    // Wait until the input is loaded
+    // This ensures GEMM instruction always has the correct input data
     instr_buf[ptr++] = get1DLoadStoreInsn(
       VTA_OPCODE_LOAD,
       VTA_MEM_ID_UOP,
@@ -574,6 +586,8 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
       1, 0, 0, 0
     );
 
+    // Perform vector-matrix dot using GEMM
+    // Need to push prev to block LOAD
     instr_buf[ptr++] = getGEMMInsn(
       0,
       batch / VTA_BATCH,
@@ -584,6 +598,8 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
     );
   }
 
+  // Store the output buffer
+  // Need to wait until GEMM finishes
   instr_buf[ptr++] = get2DLoadStoreInsn(
     VTA_OPCODE_STORE,
     VTA_MEM_ID_OUT,
