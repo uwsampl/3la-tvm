@@ -197,7 +197,7 @@ def generate_dram_insns(sim_dump, insn_idx):
 
             # Handling padding bytes: check that a value is either all padding (treat as all 0's)
             # or no padding at all
-            is_padding = ('0xXX' in current value)
+            is_padding = ('0xXX' in current_value)
             if is_padding:
                 assert all(map(lambda x: x == '0xXX', current_value))
 
