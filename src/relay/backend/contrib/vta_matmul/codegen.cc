@@ -628,7 +628,7 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
       auto func = Downcast<Function>(ref);
       auto res = GenVTAFunc(func);
       auto code = code_stream_.str();
-      String symbol = std::get<0>(res);
+      Array<String> symbol = {std::get<0>(res)};
       Array<String> vars = std::get<1>(res);
       const auto* pf = runtime::Registry::Get("runtime.CSourceModuleCreate");
       CHECK(pf != nullptr) << "Cannot find csource module to create the external runtime module";
