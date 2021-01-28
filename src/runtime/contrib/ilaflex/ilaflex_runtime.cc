@@ -39,11 +39,11 @@ class ILAFlexRuntime : public JSONRuntimeBase {
        * out = bias_add(batch_matmul(x, y), z)
        *
        * input x:
-       *  - dimension: (x_dim_0, x_dim_1, x_dim_2)
+       *  - dimension: (x_dim_0, x_dim_1)
        *  - data: x_data_ptr, x_data_size
        *
        * input y:
-       *  - dimension: (y_dim_0, y_dim_1, y_dim_2)
+       *  - dimension: (y_dim_0, y_dim_1)
        *  - data: y_data_ptr, y_data_size
        *
        * input z:
@@ -51,17 +51,16 @@ class ILAFlexRuntime : public JSONRuntimeBase {
        *  - data: z_data_ptr, z_data_size
        *
        * output:
-       *  - dimension: (o_dim_0, o_dim_1, o_dim_2)
+       *  - dimension: (o_dim_0, o_dim_1)
        *  - data: o_data_ptr, o_data_size
        */
 
       // x
       auto eid_x = EntryID(input_nodes_[0], 0);
       auto& node_data_x = data_entry_[eid_x];
-      CHECK(node_data_x->ndim == 3);
+      CHECK(node_data_x->ndim == 2);
       auto x_dim_0 = node_data_x->shape[0];
       auto x_dim_1 = node_data_x->shape[1];
-      auto x_dim_2 = node_data_x->shape[2];
       auto x_data_size = GetDataSize(*node_data_x);
       char* x_data_ptr = new char[x_data_size];
       std::copy(reinterpret_cast<char*>(node_data_x->data),
@@ -71,10 +70,9 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       // y
       auto eid_y = EntryID(input_nodes_[1], 0);
       auto& node_data_y = data_entry_[eid_y];
-      CHECK(node_data_y->ndim == 3);
+      CHECK(node_data_y->ndim == 2);
       auto y_dim_0 = node_data_y->shape[0];
       auto y_dim_1 = node_data_y->shape[1];
-      auto y_dim_2 = node_data_y->shape[2];
       auto y_data_size = GetDataSize(*node_data_y);
       char* y_data_ptr = new char[y_data_size];
       std::copy(reinterpret_cast<char*>(node_data_y->data),
@@ -95,10 +93,9 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       // output
       auto eid_o = outputs_[0].id_;
       auto node_data_o = data_entry_[eid_o];
-      CHECK(node_data_o->ndim == 3);
+      CHECK(node_data_o->ndim == 2);
       auto o_dim_0 = node_data_o->shape[0];
       auto o_dim_1 = node_data_o->shape[1];
-      auto o_dim_2 = node_data_o->shape[2];
       auto o_data_size = GetDataSize(*node_data_o);
       char* o_data_ptr = new char[o_data_size];
 
@@ -116,10 +113,10 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       CHECK(res == 0) << "Error executing simulator " << command;
 
 #if 0
-      LOG(INFO) << x_dim_0 << ", " << x_dim_1 << ", " << x_dim_2;
-      LOG(INFO) << y_dim_0 << ", " << y_dim_1 << ", " << y_dim_2;
+      LOG(INFO) << x_dim_0 << ", " << x_dim_1;
+      LOG(INFO) << y_dim_0 << ", " << y_dim_1;
       LOG(INFO) << z_dim_0;
-      LOG(INFO) << o_dim_0 << ", " << o_dim_1 << ", " << o_dim_2;
+      LOG(INFO) << o_dim_0 << ", " << o_dim_1;
 #endif
 
       // copy the result and resume
