@@ -16,15 +16,17 @@
 # under the License.
 
 """
-The search policies for TVM Auto-scheduler.
+The search policies of TVM auto-scheduler.
 
-This contains the strategies to generate a schedule automatically. We provide an EmptyPolicy
-which always returns an unchanged initial state, and a more advanced SketchPolicy which can
-deal with various ops/subgraphs on different target devices.
+The auto-scheduler constructs a search space according to the compute declaration.
+It then randomly samples programs from the search space and uses evolutionary search with a
+learned cost model to fine tune the sampled programs.
+The final optimized programs are sent to actual hardware for measurement.
+The above process is repeated until the auto-scheduler runs out of time budget.
 
 Reference:
 L. Zheng, C. Jia, M. Sun, Z. Wu, C. Yu, et al. "Ansor : Generating High-Performance Tensor
-Programs for Deep Learning." arXiv preprint arXiv:2006.06762 (2020).
+Programs for Deep Learning." (OSDI 2020).
 """
 
 import random
@@ -55,7 +57,7 @@ class PreloadMeasuredStates(SearchCallback):
         The name of the record file.
     """
 
-    def __init__(self, filename="auto_scheduler_tuning.json"):
+    def __init__(self, filename):
         self.__init_handle_by_constructor__(_ffi_api.PreloadMeasuredStates, filename)
 
 
@@ -63,11 +65,42 @@ class PreloadMeasuredStates(SearchCallback):
 class SearchPolicy(Object):
     """ The base class of search policies. """
 
+    def continue_search_one_round(self, num_measure, measurer):
+        """
+        Continue the search by doing an additional search round.
+
+        Parameters
+        ----------
+        num_measure: int
+            The number of programs to measure in this round
+        measurer: ProgramMeasurer
+            The program measurer to measure programs
+
+        Returns
+        -------
+        inputs: List[MeasureInput]
+            The inputs of measurments in this search round
+        results: List[MeasureResult]
+            The results of measurments in this search round
+        """
+        return _ffi_api.SearchPolicyContinueSearchOneRound(self, num_measure, measurer)
+
+    def set_verbose(self, verbose):
+        """
+        Set the verbosity level of the search policy.
+
+        Parameters
+        ----------
+        verbose: int
+            The verbosity level
+        """
+        return _ffi_api.SearchPolicySetVerbose(self, verbose)
+
 
 @tvm._ffi.register_object("auto_scheduler.EmptyPolicy")
 class EmptyPolicy(SearchPolicy):
-    """This is an example empty search policy which will always generate
-    the init state of ComputeDAG.
+    """A simple example of the search policy which always returns
+    the initial naive schedule (state).
 
     Parameters
     ----------
@@ -114,11 +147,12 @@ class SketchPolicy(SearchPolicy):
 
     DEFAULT_PARAMS = {
         "eps_greedy": 0.05,
-        "retry_search_one_round_on_empty": 10,
+        "retry_search_one_round_on_empty": 1,
+        "sample_init_min_population": 50,
+        "sample_init_use_measured_ratio": 0.2,
         "evolutionary_search_population": 2048,
-        "evolutionary_search_num_iters": 10,
+        "evolutionary_search_num_iters": 4,
         "evolutionary_search_mutation_prob": 0.85,
-        "evolutionary_search_use_measured_ratio": 0.2,
         "cpu_multi_level_tiling_structure": "SSRSRS",
         "gpu_multi_level_tiling_structure": "SSSRRSRS",
         # Notice: the default thread bind policy of GPU assumes the tiling structure to have at
@@ -176,34 +210,31 @@ class SketchPolicy(SearchPolicy):
                 print(s)
         return sketches
 
-    def sample_initial_population(self, pop_size):
+    def sample_initial_population(self):
         """Sample initial population.
         This python interface is mainly used for debugging and testing.
         The actual search is all done in c++.
-
-        Parameters
-        ----------
-        pop_size : int
-            The size of sampled population
 
         Returns
         -------
         states: List[State]
             The sampled states
         """
-        states = _ffi_api.SketchPolicySampleInitialPopulation(self, pop_size)
+        states = _ffi_api.SketchPolicySampleInitialPopulation(self)
         return states
 
     def evolutionary_search(self, init_populations, out_size):
-        """Evolutionary search.
+        """Perform evolutionary search.
         This python interface is mainly used for debugging and testing.
         The actual search is all done in c++.
+
         Parameters
         ----------
         init_populations: List[State]
             The initial population states
         out_size : int
             The size of generated states
+
         Returns
         -------
         states: List[State]

@@ -17,6 +17,8 @@
 """Unit tests for graph partitioning."""
 import os
 import sys
+import json
+import math
 import numpy as np
 
 import tvm
@@ -26,22 +28,37 @@ import tvm.relay.transform
 from tvm import relay
 from tvm.relay import transform
 from tvm import runtime
-from tvm.contrib import util
+from tvm.contrib import utils
+import vta
+import vta.testing
 
 
-def check_result(mod, map_inputs, out_shape, result, tol=1e-5, target="llvm", ctx=tvm.cpu()):
+def check_result(mod, map_inputs, out_shape, result, tol=1e-5, target="llvm", ctx=tvm.cpu(), use_graph_rt=True):
     if sys.platform == "win32":
         print("Skip test on Windows for now")
         return
 
     def update_lib(lib):
+        vta_hw_path = os.environ['VTA_HW_PATH']
+        tvm_home = os.environ['TVM_HOME']
         test_dir = os.path.dirname(os.path.realpath(os.path.expanduser(__file__)))
         source_dir = os.path.join(test_dir, "..", "..", "..")
-        contrib_path = os.path.join(source_dir, "src", "runtime", "contrib")
-
+        vta_config = json.load(open('/' + os.path.join(*(vta_hw_path.split(os.path.sep) + ['config', 'vta_config.json']))))
+        
+        vta_config['LOG_BLOCK_IN'] = vta_config['LOG_BLOCK']
+        vta_config['LOG_BLOCK_OUT'] = vta_config['LOG_BLOCK']
+        vta_config['LOG_OUT_WIDTH'] = vta_config['LOG_INP_WIDTH']
+        vta_config['LOG_OUT_BUFF_SIZE'] = vta_config['LOG_ACC_BUFF_SIZE'] + vta_config['LOG_OUT_WIDTH'] - vta_config['LOG_ACC_WIDTH']
         kwargs = {}
-        kwargs["options"] = ["-O2", "-std=c++14", "-I" + contrib_path]
-        tmp_path = util.tempdir()
+        kwargs["options"] = ["-O2", "-std=c++14",
+                             f"-L{tvm_home}/build", 
+                             "-lvta_fsim",
+                             f'-I{tvm_home}/src/runtime/contrib',
+                             f"-I{tvm_home}/3rdparty/vta-hw/include"] \
+                          + [f'-D{"VTA_" + x}={y}' for (x, y) in filter(lambda pi: 'LOG' in pi[0], vta_config.items())]
+        kwargs["options"].append(f'-DVTA_LOG_BLOCK_IN={vta_config["LOG_BLOCK"]}')
+        kwargs["options"].append(f'-DVTA_LOG_BLOCK_OUT={vta_config["LOG_BLOCK"]}')
+        tmp_path = utils.tempdir()
         lib_name = "lib.so"
         lib_path = tmp_path.relpath(lib_name)
         lib.export_library(lib_path, fcompile=False, **kwargs)
@@ -74,7 +91,8 @@ def check_result(mod, map_inputs, out_shape, result, tol=1e-5, target="llvm", ct
         tvm.testing.assert_allclose(out.asnumpy(), result, rtol=tol, atol=tol)
 
     check_vm_result()
-    check_graph_runtime_result()
+    if use_graph_rt:
+        check_graph_runtime_result()
 
 
 def set_external_func_attr(func, compiler, ext_symbol):
@@ -220,6 +238,39 @@ def test_extern_gcc():
     check_result(mod, {"x": x_data, "y": y_data}, (2, 2), (y_data * y_data) - (x_data + x_data))
 
 
+def test_extern_gcc_consts():
+    @tvm._ffi.register_func("relay.ext.ccompiler.constant_updater")
+    def constant_updater(expr, symbol):
+        """A dummy constant updater just to test that a custom one works."""
+        return {"ccompiler_0_p0": tvm.nd.array(y0_data)}
+
+    x = relay.var("x", shape=(8, 8))
+    y0_data = np.random.uniform(0, 1, (8, 8)).astype("float32")
+
+    x0 = relay.var("x0", shape=(8, 8))
+    y0_const = relay.const(y0_data, "float32")
+    z = x0 + y0_const
+    f = relay.Function([x0], z)
+    f = set_external_func_attr(f, "ccompiler", "ccompiler_0")
+    call = relay.Call(f, [x])
+    mod = tvm.IRModule.from_expr(call)
+
+    with tvm.transform.PassContext(opt_level=3, disabled_pass=["AlterOpLayout"]):
+        compiler = relay.backend.vm.VMCompiler()
+        compiler.lower(mod, "llvm")
+        compiler.codegen()
+        params = compiler.get_params()
+        assert len(params) == 1
+        assert "ccompiler_0_p0" in params.keys()
+
+    with tvm.transform.PassContext(opt_level=3, disabled_pass=["AlterOpLayout"]):
+        _, _, params = relay.build(mod, target="llvm")
+        assert len(params) == 1
+        assert "ccompiler_0_p0" in params.keys()
+
+    tvm._ffi.registry.remove_global_func("relay.ext.ccompiler.constant_updater")
+
+
 def test_extern_dnnl():
     if not tvm.get_global_func("relay.ext.dnnl", True):
         print("skip because DNNL codegen is not available")
@@ -300,20 +351,24 @@ def test_extern_vta():
     if not tvm.get_global_func("relay.ext.vta_matmul", True):
         print('VTA ILA codegen not supported')
 
+
+    vta.testing.simulator.dump_mode(True)
     dtype = 'float32'
-    ishape = (3, 24)
-    wshape = (5, 24)
+    ishape = (16, 16)
+    wshape = (16, 16)
 
     data = relay.var('data', shape=(ishape), dtype=dtype)
-    weight = relay.const(np.random.uniform(0, 1, wshape).astype(dtype), dtype=dtype)
+    weight = relay.var('weight', shape=(wshape), dtype=dtype)
 
     data_1 = relay.log(data)
-    o1 = relay.multiply(data_1, relay.const(np.random.uniform(0, 1, ishape)))
+    o1 = relay.multiply(data_1, relay.const(np.random.uniform(1, 1, ishape)))
 
     out = relay.nn.dense(o1, weight) # relay.Call(dense_func, [o1])
-    f = relay.Function([data], out)
+    f = relay.Function([data, weight], out)
     inputs = relay.var('input', shape=ishape, dtype=dtype)
-    call = relay.Call(f, [inputs])
+    weights = relay.var('w', shape=wshape, dtype=dtype)
+    call = relay.Call(f, [inputs, weights])
+
 
     mod = tvm.IRModule()
     mod['main'] = f
@@ -322,16 +377,22 @@ def test_extern_vta():
     seq = tvm.transform.Sequential([transform.AnnotateTarget('vta_matmul'),
                                     transform.PartitionGraph()])
     mod = seq(mod)
-    in_data = np.random.uniform(0, 1, ishape).astype(dtype)
-    print(check_result(mod, {
-        'input' : in_data
-    }, (3, 5), np.random.uniform(0, 1, (3, 5)).astype(dtype)))
+
+    in_data = np.array([math.e] * ishape[0] * ishape[1]).reshape(ishape).astype(dtype)
+    w_data = (np.arange(wshape[0] * wshape[1]) % 10).reshape(wshape).astype(dtype)
+    check_result(mod, {
+        'input' : in_data,
+        'w': w_data
+    }, (16, 16), np.matmul(np.array([1] * 16 * 16).reshape(ishape).astype(dtype),
+                 np.transpose(w_data)).astype(dtype), use_graph_rt=False)
+
 
 if __name__ == "__main__":
     test_multi_node_subgraph()
     test_extern_gcc_single_op()
     test_extern_gcc_single_op_int()
     test_extern_gcc()
+    test_extern_gcc_consts()
     test_extern_dnnl()
     test_extern_dnnl_const()
     test_extern_vta()

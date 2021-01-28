@@ -22,15 +22,13 @@ import logging
 from collections import defaultdict
 
 import numpy as np
-import xgboost as xgb
-from xgboost.core import EarlyStopException
-from xgboost.callback import _fmt_metric
-from xgboost.training import aggcv
 
 from tvm.autotvm.tuner.metric import max_curve
 from .cost_model import PythonBasedModel
 from ..feature import get_per_store_features_from_measure_pairs, get_per_store_features_from_states
 from ..measure_record import RecordReader
+
+xgb = None
 
 logger = logging.getLogger("auto_scheduler")
 
@@ -76,7 +74,7 @@ dmatrix_context = XGBDMatrixContext()
 class XGBModel(PythonBasedModel):
     """Train a XGBoost model to predict the normalized throughputs of programs.
     Let the normalized throughput be the score of a program (higher is better). We predict
-    the (approximiate) score of a program = the sum of the scores of all stages in this program.
+    the (approximate) score of a program = the sum of the scores of all stages in this program.
     i.e. score(P) = score_s0 + score_s1 + ... + score_sn,
     where score_si is the score of Stage i in Program P.
     We extract feature for each stage and let the xgboost predict the score for each stage.
@@ -91,6 +89,17 @@ class XGBModel(PythonBasedModel):
     """
 
     def __init__(self, verbose_eval=25, num_warmup_sample=100, seed=None):
+        global xgb
+        try:
+            if xgb is None:
+                xgb = __import__("xgboost")
+        except ImportError:
+            raise ImportError(
+                "XGBoost is required for XGBModel. "
+                "Please install its python package first. "
+                "Help: (https://xgboost.readthedocs.io/en/latest/) "
+            )
+
         self.xgb_params = {
             "max_depth": 10,
             "gamma": 0.001,
@@ -188,7 +197,7 @@ class XGBModel(PythonBasedModel):
         else:
             ret = np.random.uniform(0, 1, (len(states),))
 
-        # Predict 0 for invalid states that failed to be lowered.
+        # Predict -inf for invalid states that failed to be lowered.
         for idx, feature in enumerate(features):
             if feature.min() == feature.max() == 0:
                 ret[idx] = float("-inf")
@@ -501,6 +510,15 @@ def custom_callback(
     skip_every=2,
 ):
     """Callback function for xgboost to support multiple custom evaluation functions"""
+    # pylint: disable=import-outside-toplevel
+    from xgboost.core import EarlyStopException
+    from xgboost.callback import _fmt_metric
+
+    try:
+        from xgboost.training import aggcv
+    except ImportError:
+        from xgboost.callback import _aggcv as aggcv
+
     state = {}
     metric_shortname = metric.split("-")[1]
 

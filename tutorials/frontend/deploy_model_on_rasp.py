@@ -30,7 +30,7 @@ import tvm
 from tvm import te
 import tvm.relay as relay
 from tvm import rpc
-from tvm.contrib import util, graph_runtime as runtime
+from tvm.contrib import utils, graph_runtime as runtime
 from tvm.contrib.download import download_testdata
 
 ######################################################################
@@ -53,7 +53,7 @@ from tvm.contrib.download import download_testdata
 #
 # .. code-block:: bash
 #
-#   git clone --recursive https://github.com/apache/incubator-tvm tvm
+#   git clone --recursive https://github.com/apache/tvm tvm
 #   cd tvm
 #   mkdir build
 #   cp cmake/config.cmake build
@@ -96,7 +96,7 @@ from tvm.contrib.download import download_testdata
 # Back to the host machine, which should have a full TVM installed (with LLVM).
 #
 # We will use pre-trained model from
-# `MXNet Gluon model zoo <https://mxnet.incubator.apache.org/api/python/gluon/model_zoo.html>`_.
+# `MXNet Gluon model zoo <https://mxnet.apache.org/api/python/gluon/model_zoo.html>`_.
 # You can found more details about this part at tutorial :ref:`tutorial-from-mxnet`.
 
 from mxnet.gluon.model_zoo.vision import get_model
@@ -193,7 +193,7 @@ with tvm.transform.PassContext(opt_level=3):
 # change the parameters but keep the result of model as the same.
 
 # Save the library at local temporary directory.
-tmp = util.tempdir()
+tmp = utils.tempdir()
 lib_fname = tmp.relpath("net.tar")
 lib.export_library(lib_fname)
 

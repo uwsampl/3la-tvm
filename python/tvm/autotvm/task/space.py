@@ -34,7 +34,7 @@ import numpy as np
 
 from tvm.te import schedule, thread_axis
 from tvm.tir import expr
-from tvm.autotvm.util import get_const_int
+from tvm.autotvm.utils import get_const_int
 
 Axis = namedtuple("Axis", ["space", "index"])
 
@@ -836,6 +836,8 @@ class ConfigSpace(object):
         return [Axis(None, i) for i in range(space_class.get_num_output(axes, policy, **kwargs))]
 
     def __len__(self):
+        if not self.space_map:
+            return 0
         if self._length is None:
             self._length = int(np.prod([len(x) for x in self.space_map.values()]))
         return self._length

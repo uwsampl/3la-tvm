@@ -17,17 +17,25 @@
 
 This is a fork of TVM for adding BYOC integrations for the 3LA project.
 
-Right now we have a VTA integration in `src/relay/backend/contrib/vta_matmul`. Note that you have to include the line `SET(USE_VTA_MATMUL ON)` in `build/config.cmake` before building TVM to support this.
+
+Right now we have a VTA integration in `src/relay/backend/contrib/vta_matmul`. Note that you have to include the line `SET(USE_VTA_MATMUL ON)` in `build/config.cmake` before building TVM to support this (other flags that should be on: `USE_LLVM`, `USE_VTA_FSIM`). We have a test of this backend in `tests/python/relay/test_external_codegen.py` (see `test_extern_vta()`).
+
+This version also uses a fork of the VTA repo meant to dump logs.
+Try `vta/python/integration/matmul_tutorial.py` to use the dumping facility.
+VTA can be set into dumping mode by calling `vta.testing.simulator.dump_mode(True)`.
+You can specify the location at which the dump will be deposited using `vta.testing.simulator.dump_target(path)`; the default is `./vta_sim_dump.json`.
+See the readme at [the VTA fork](https://github.com/uwsampl/3la-vta) to see a description of the dumping mode and the dumping format.
+
+You can use `vta.testing.ila_converter.convert(dump_file, dest_file)` to convert a VTA simulator dump into an ILA program fragment.
 
 <img src=https://raw.githubusercontent.com/apache/incubator-tvm-site/main/images/logo/tvm-logo-small.png width=128/> Open Deep Learning Compiler Stack
-==============================================
 [Documentation](https://tvm.apache.org/docs) |
 [Contributors](CONTRIBUTORS.md) |
 [Community](https://tvm.apache.org/community) |
 [Release Notes](NEWS.md)
 
 [![Build Status](https://ci.tlcpack.ai/buildStatus/icon?job=tvm/main)](https://ci.tlcpack.ai/job/tvm/job/main/)
-[![WinMacBuild](https://github.com/apache/incubator-tvm/workflows/WinMacBuild/badge.svg)](https://github.com/apache/incubator-tvm/actions?query=workflow%3AWinMacBuild)
+[![WinMacBuild](https://github.com/apache/tvm/workflows/WinMacBuild/badge.svg)](https://github.com/apache/tvm/actions?query=workflow%3AWinMacBuild)
 
 Apache TVM (incubating) is a compiler stack for deep learning systems. It is designed to close the gap between the
 productivity-focused deep learning frameworks, and the performance- and efficiency-focused hardware backends.

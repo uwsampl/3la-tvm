@@ -40,7 +40,7 @@ log file to get the best knob parameters.
 #
 # .. code-block:: bash
 #
-#   pip3 install --user psutil xgboost tornado mxnet requests "Pillow<7"
+#   pip3 install --user psutil xgboost tornado mxnet requests "Pillow<7" cloudpickle
 #
 # To make TVM run faster during tuning, it is recommended to use cython
 # as FFI of TVM. In the root directory of TVM, execute
@@ -62,7 +62,7 @@ from tvm import topi
 import tvm
 from tvm import te
 from tvm import rpc, autotvm, relay
-from tvm.contrib import graph_runtime, util, download
+from tvm.contrib import graph_runtime, utils, download
 from tvm.autotvm.measure.measure_methods import request_remote
 from tvm.autotvm.tuner import XGBTuner, GATuner, RandomTuner, GridSearchTuner
 
@@ -340,18 +340,6 @@ def register_vta_tuning_tasks():
 
 def tune_and_evaluate(tuning_opt):
 
-    if env.TARGET != "sim":
-        # Get remote from fleet node
-        remote = autotvm.measure.request_remote(
-            env.TARGET, tracker_host, tracker_port, timeout=10000
-        )
-        # Reconfigure the JIT runtime and FPGA.
-        vta.reconfig_runtime(remote)
-        vta.program_fpga(remote, bitstream=None)
-    else:
-        # In simulation mode, host the RPC server locally.
-        remote = rpc.LocalSession()
-
     # Register VTA tuning tasks
     register_vta_tuning_tasks()
 
@@ -407,6 +395,19 @@ def tune_and_evaluate(tuning_opt):
     print("Tuning...")
     tune_tasks(tasks, **tuning_opt)
 
+    # evaluate with tuning history
+    if env.TARGET != "sim":
+        # Get remote from fleet node
+        remote = autotvm.measure.request_remote(
+            env.TARGET, tracker_host, tracker_port, timeout=10000
+        )
+        # Reconfigure the JIT runtime and FPGA.
+        vta.reconfig_runtime(remote)
+        vta.program_fpga(remote, bitstream=None)
+    else:
+        # In simulation mode, host the RPC server locally.
+        remote = rpc.LocalSession()
+
     # compile kernels with history best records
     with autotvm.tophub.context(target, extra_files=[log_file]):
         # Compile network
@@ -424,10 +425,10 @@ def tune_and_evaluate(tuning_opt):
 
         # Export library
         print("Upload...")
-        temp = util.tempdir()
-        lib.save(temp.relpath("graphlib.o"))
-        remote.upload(temp.relpath("graphlib.o"))
-        lib = remote.load_module("graphlib.o")
+        temp = utils.tempdir()
+        lib.export_library(temp.relpath("graphlib.tar"))
+        remote.upload(temp.relpath("graphlib.tar"))
+        lib = remote.load_module("graphlib.tar")
 
         # Generate the graph runtime
         ctx = remote.ext_dev(0) if device == "vta" else remote.cpu(0)
@@ -507,4 +508,4 @@ tune_and_evaluate(tuning_option)
 #      import logging
 #      logging.getLogger('autotvm').setLevel(logging.DEBUG)
 #
-#   Finally, always feel free to ask our community for help on https://discuss.tvm.ai
+#   Finally, always feel free to ask our community for help on https://discuss.tvm.apache.org
