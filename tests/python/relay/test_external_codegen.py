@@ -351,6 +351,7 @@ def test_extern_vta():
     if not tvm.get_global_func("relay.ext.vta_matmul", True):
         print('VTA ILA codegen not supported')
 
+
     vta.testing.simulator.dump_mode(True)
     dtype = 'float32'
     ishape = (16, 16)
@@ -368,6 +369,7 @@ def test_extern_vta():
     weights = relay.var('w', shape=wshape, dtype=dtype)
     call = relay.Call(f, [inputs, weights])
 
+
     mod = tvm.IRModule()
     mod['main'] = f
     mod = relay.transform.InferType()(mod)
@@ -375,6 +377,7 @@ def test_extern_vta():
     seq = tvm.transform.Sequential([transform.AnnotateTarget('vta_matmul'),
                                     transform.PartitionGraph()])
     mod = seq(mod)
+
     in_data = np.array([math.e] * ishape[0] * ishape[1]).reshape(ishape).astype(dtype)
     w_data = (np.arange(wshape[0] * wshape[1]) % 10).reshape(wshape).astype(dtype)
     check_result(mod, {
@@ -382,6 +385,7 @@ def test_extern_vta():
         'w': w_data
     }, (16, 16), np.matmul(np.array([1] * 16 * 16).reshape(ishape).astype(dtype),
                  np.transpose(w_data)).astype(dtype), use_graph_rt=False)
+
 
 if __name__ == "__main__":
     test_multi_node_subgraph()
