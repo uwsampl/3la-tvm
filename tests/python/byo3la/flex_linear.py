@@ -10,26 +10,26 @@ from tvm.relay.op.contrib import ilaflex
 
 # define the graph
 dtype="int8"
-m = 16
-n = 4
-b = 1
+m = 4
+n = 16
 
-shape1 = tvm.relay.TensorType((b, m, n), dtype=dtype)
-shape2 = tvm.relay.TensorType((m, ), dtype=dtype)
+shape1 = tvm.relay.TensorType((n, m), dtype=dtype)
+shape2 = tvm.relay.TensorType((n, m), dtype=dtype)
+shape3 = tvm.relay.TensorType((n,), dtype=dtype)
 x = tvm.relay.var("x", shape1)
-y = tvm.relay.var("y", shape1)
-z = tvm.relay.var("z", shape2)
-inter = tvm.relay.nn.batch_matmul(x, y)
-final = tvm.relay.nn.bias_add(inter, z)
+w = tvm.relay.var("w", shape2)
+b = tvm.relay.var("b", shape3)
+matmul = tvm.relay.nn.dense(x, w)
+final = tvm.relay.nn.bias_add(matmul, b)
 
 mod = tvm.ir.IRModule.from_expr(final)
+print(mod)
 
 
 # pattern matching
 pattern_table = ilaflex.pattern_table()
 mod = tvm.relay.transform.MergeComposite(pattern_table)(mod)
 mod = tvm.relay.transform.AnnotateTarget(["ilaflex"])(mod) 
-#mod = tvm.relay.transform.MergeCompilerRegions()(mod) 
 mod = tvm.relay.transform.PartitionGraph()(mod) 
 
 print("[Python] Compile with the 3LA extension")
@@ -44,9 +44,9 @@ from tvm.contrib import graph_runtime
 ctx = tvm.cpu()
 runtime_exec = graph_runtime.create(graph, lib, ctx)
 
-x_np = np.random.uniform(1, 10, size=(b, m, n)).astype(np.int8)
-y_np = np.random.uniform(1, 10, size=(b, m, n)).astype(np.int8)
-z_np = np.random.uniform(1, 10, size=(m, )).astype(np.int8)
+x_np = np.random.uniform(1, 10, size=(n, m)).astype(np.int8)
+y_np = np.random.uniform(1, 10, size=(n, m)).astype(np.int8)
+z_np = np.random.uniform(1, 10, size=(n,)).astype(np.int8)
 x_tvm = tvm.nd.array(x_np, ctx=ctx)
 y_tvm = tvm.nd.array(y_np, ctx=ctx)
 z_tvm = tvm.nd.array(z_np, ctx=ctx)
