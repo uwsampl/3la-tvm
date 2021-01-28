@@ -7,8 +7,8 @@ def make_pattern_linear():
     a = wildcard()
     b = wildcard()
     c = wildcard()
-    matmul = is_op('nn.batch_matmul')(a, b)
-    linear = is_op('nn.bias_add')(matmul, c)
+    dense = is_op('nn.dense')(a, b)
+    linear = is_op('nn.bias_add')(dense, c)
     return linear
 
 @register_pattern_table("ilaflex")
