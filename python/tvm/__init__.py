@@ -78,7 +78,7 @@ if support.libinfo().get("USE_MICRO", "OFF") == "ON":
 
 def _should_print_backtrace():
     in_pytest = "PYTEST_CURRENT_TEST" in os.environ
-    tvm_backtrace = os.environ.get("TVM_BACKTRACE", "0")
+    tvm_backtrace = os.environ.get("TVM_BACKTRACE", "1")
 
     try:
         tvm_backtrace = bool(int(tvm_backtrace))
