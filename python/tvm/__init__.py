@@ -70,7 +70,7 @@ from .contrib import rocm as _rocm, nvcc as _nvcc, sdaccel as _sdaccel
 
 def _should_print_backtrace():
     in_pytest = "PYTEST_CURRENT_TEST" in os.environ
-    tvm_backtrace = os.environ.get("TVM_BACKTRACE", "0")
+    tvm_backtrace = os.environ.get("TVM_BACKTRACE", "1")
 
     try:
         tvm_backtrace = bool(int(tvm_backtrace))
