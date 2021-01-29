@@ -6,6 +6,9 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <iomanip>
+#include <fstream>
+#include <sstream>
 
 #include "../json/json_node.h"
 #include "../json/json_runtime.h"
@@ -61,10 +64,10 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       CHECK(node_data_x->ndim == 2);
       auto x_dim_0 = node_data_x->shape[0];
       auto x_dim_1 = node_data_x->shape[1];
-      auto x_data_size = GetDataSize(*node_data_x);
-      char* x_data_ptr = new char[x_data_size];
-      std::copy(reinterpret_cast<char*>(node_data_x->data),
-                reinterpret_cast<char*>(node_data_x->data) + x_data_size,
+      auto x_data_size = GetDataSize(*node_data_x)/sizeof(float);
+      float* x_data_ptr = new float[x_data_size];
+      std::copy(reinterpret_cast<float*>(node_data_x->data),
+                reinterpret_cast<float*>(node_data_x->data) + x_data_size,
                 x_data_ptr);
 
       // y
@@ -73,10 +76,10 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       CHECK(node_data_y->ndim == 2);
       auto y_dim_0 = node_data_y->shape[0];
       auto y_dim_1 = node_data_y->shape[1];
-      auto y_data_size = GetDataSize(*node_data_y);
-      char* y_data_ptr = new char[y_data_size];
-      std::copy(reinterpret_cast<char*>(node_data_y->data),
-                reinterpret_cast<char*>(node_data_y->data) + y_data_size,
+      auto y_data_size = GetDataSize(*node_data_y)/sizeof(float);
+      float* y_data_ptr = new float[y_data_size];
+      std::copy(reinterpret_cast<float*>(node_data_y->data),
+                reinterpret_cast<float*>(node_data_y->data) + y_data_size,
                 y_data_ptr);
 
       // z
@@ -84,10 +87,10 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       auto& node_data_z = data_entry_[eid_z];
       CHECK(node_data_z->ndim == 1);
       auto z_dim_0 = node_data_z->shape[0];
-      auto z_data_size = GetDataSize(*node_data_z);
-      char* z_data_ptr = new char[z_data_size];
-      std::copy(reinterpret_cast<char*>(node_data_z->data),
-                reinterpret_cast<char*>(node_data_z->data) + z_data_size,
+      auto z_data_size = GetDataSize(*node_data_z)/sizeof(float);
+      float* z_data_ptr = new float[z_data_size];
+      std::copy(reinterpret_cast<float*>(node_data_z->data),
+                reinterpret_cast<float*>(node_data_z->data) + z_data_size,
                 z_data_ptr);
 
       // output
@@ -96,8 +99,8 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       CHECK(node_data_o->ndim == 2);
       auto o_dim_0 = node_data_o->shape[0];
       auto o_dim_1 = node_data_o->shape[1];
-      auto o_data_size = GetDataSize(*node_data_o);
-      char* o_data_ptr = new char[o_data_size];
+      auto o_data_size = GetDataSize(*node_data_o)/sizeof(float);
+      float* o_data_ptr = new float[o_data_size];
 
       /* TODO
        *  - FlexNLP ILA simulator is available in $PATH as "flexnlp_ila_sim"
@@ -107,26 +110,75 @@ class ILAFlexRuntime : public JSONRuntimeBase {
        *  - invoke the ILA simulator
        *  - read back the result and store to o_data_ptr
        */
-      // call ILAng-generated simulator
-      std::string command = "echo \"call assembly helper\"";
-      auto res = std::system(command.c_str());
-      CHECK(res == 0) << "Error executing simulator " << command;
+      // dump data to files
+      dump_data(x_data_ptr, x_data_size, "./data/inp.txt");
+      dump_data(y_data_ptr, y_data_size, "./data/wgt.txt");
+      dump_data(z_data_ptr, z_data_size, "./data/bias.txt");
 
-#if 0
-      LOG(INFO) << x_dim_0 << ", " << x_dim_1;
-      LOG(INFO) << y_dim_0 << ", " << y_dim_1;
-      LOG(INFO) << z_dim_0;
+      // calculate flexnlp tensor assembly parameters;
+      int num_vector_in = x_dim_1/16;
+      int num_vector_out = y_dim_0/16;
+      int num_timestep = x_dim_0;
+      int is_bias = 1;
+
+      // call ILAng-generated simulator
+      std::string call_cmd = "python3 linear_layer_driver.py " + 
+                             std::to_string(num_vector_in) + " " +
+                             std::to_string(num_vector_out) + " " +
+                             std::to_string(num_timestep) + " " +
+                             std::to_string(is_bias);
+      // std::string command = "echo \"call assembly helper\"";
+      std::system("echo \"calling flexnlp linear layer driver\"");
+      auto res = std::system(call_cmd.c_str());
+      CHECK(res == 0) << "Error executing simulator " << call_cmd;
+
+      // retrieve the results
+      retrieve_result(o_data_ptr, o_data_size, "./data/result.txt");
+#if 1
+      LOG(INFO) << "x_dimension: " << x_dim_0 << ", " << x_dim_1;
+      LOG(INFO) << "x_data_size: " << x_data_size;
+      LOG(INFO) << "y_dimension: " << y_dim_0 << ", " << y_dim_1;
+      LOG(INFO) << "y_data_size: " << y_data_size;
+      LOG(INFO) << "z_dimension: " << z_dim_0;
+      LOG(INFO) << "z_data_size: " << z_data_size;
       LOG(INFO) << o_dim_0 << ", " << o_dim_1;
 #endif
 
       // copy the result and resume
       std::copy(o_data_ptr, o_data_ptr + o_data_size,
-                reinterpret_cast<char*>(node_data_o->data));
+                reinterpret_cast<float*>(node_data_o->data));
 
     } else {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
     LOG(INFO) << "[Runtime] exit " << symbol_name_ << " runtime, resume host";
+  }
+
+  void dump_data(float* data_ptr, unsigned long& size, std::string path) {
+    std::ofstream fout;
+    std::stringstream ss;
+    fout.open(path, std::ios::out | std::ios::trunc);
+    for (auto i = 0; i < size; ++i) {
+      ss << data_ptr[i] << '\n';
+    }
+    fout << ss.rdbuf();
+    fout.close();
+  }
+
+  void retrieve_result(float* data_ptr, unsigned long& size, std::string path) {
+    // retrieve flexnlp results
+    std::ifstream fin;
+    fin.open("./data/result.txt", std::ios::in);
+    std::string float_str;
+    unsigned long cntr = 0;
+
+    while(std::getline(fin, float_str)) {
+      if (cntr >= size) {
+        LOG(FATAL) << "wrong number of elements in the result tensor";
+      }
+      data_ptr[cntr] = std::stof(float_str);
+      ++cntr;
+    }
   }
 
  protected:
