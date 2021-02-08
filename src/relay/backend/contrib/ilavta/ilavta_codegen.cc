@@ -45,6 +45,8 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
         //
       } else if (name == "ilavta.batch_matmul") {
         //
+      } else if (name == "ilavta.dense") {
+        //
       } else {
         LOG(FATAL) << "Unrecognized pattern: " << name;
       }

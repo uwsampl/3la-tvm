@@ -39,9 +39,15 @@ def make_pattern_batch_matmul():
     matmul = is_op('nn.batch_matmul')(a, b)
     return matmul
 
+def make_pattern_dense():
+    a = wildcard()
+    b = wildcard()
+    return is_op('nn.dense')(a, b)
+
 @register_pattern_table("ilavta")
 def pattern_table():
     conv2d_pat = ("ilavta.conv2d", make_pattern_conv2d())
     matmul_pat = ("ilavta.batch_matmul", make_pattern_batch_matmul())
-    ilavta_patterns = [conv2d_pat, matmul_pat]
+    dense_pat  = ("ilavta.dense", make_pattern_dense())  
+    ilavta_patterns = [conv2d_pat, matmul_pat, dense_pat]
     return ilavta_patterns
