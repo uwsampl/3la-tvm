@@ -35,3 +35,4 @@ if(USE_VTA_MATMUL)
   # endforeach()
   message(STATUS "Build with Codegen for VTA...")
 endif(USE_VTA_MATMUL)
+

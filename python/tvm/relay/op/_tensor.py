@@ -89,6 +89,10 @@ register_injective_schedule("device_copy")
 register_broadcast_schedule("fast_exp")
 register_broadcast_schedule("fast_tanh")
 register_broadcast_schedule("fast_erf")
+# a fake on_device schedule.
+# this will not be used in actual computation
+# as on_device will be removed during DeviceAnnotation pass
+register_injective_schedule("on_device")
 
 
 # zeros
@@ -230,6 +234,7 @@ def elemwise_shape_func(attrs, inputs, _):
 
 
 register_shape_func("cast", False, elemwise_shape_func)
+register_shape_func("cast_like", False, elemwise_shape_func)
 register_shape_func("zeros", False, no_data_full_shape_func)
 register_shape_func("zeros_like", False, elemwise_shape_func)
 register_shape_func("ones", False, no_data_full_shape_func)

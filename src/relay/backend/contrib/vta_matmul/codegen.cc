@@ -177,14 +177,18 @@ class CodegenVTA : public MemoizedExprTranslator<std::vector<Output>>, public Co
 
     std::vector<std::string> GetArgumentNames(const CallNode* call) {
       std::vector<std::string> arg_names;
+
       std::cerr << "Arg Size: " << call->args.size() << std::endl;
+
       for (size_t i = 0; i < call->args.size(); ++i) {
         auto res = VisitExpr(call->args[i]);
         for (const auto& out : res) {
           arg_names.push_back(out.name);
+
           // std::cerr << out.name << " ";
         }
         // std::cerr << std::endl;
+
       }
       return arg_names;
     }
@@ -235,6 +239,7 @@ class VTAMatMulModuleCodegen : public CSourceModuleCodegenBase {
       code_stream_ << "#include <tvm/runtime/c_runtime_api.h>\n";
       code_stream_ << "#include <tvm/runtime/container.h>\n";
       code_stream_ << "#include <tvm/runtime/packed_func.h>\n";
+
       code_stream_ << "#include <vta_matmul/vta_matmul_runtime.h>\n";
       code_stream_ << "#include <dlpack/dlpack.h>\n";
       code_stream_ << "#include <cmath>\n";
@@ -622,16 +627,19 @@ extern "C" TVM_DLL void run_vta_simulator(float* input, float* weight, int batch
           std::cerr << "DEBUG: " << inp[0] << std::endl;
           run_vta_simulator(inp, weight, in_0, in_1, w_0, out);
         })op_macro";
+
       // code_stream_ << "using namespace tvm::runtime::contrib;\n";
 
       code_stream_ << ila_code << "\n";
       auto func = Downcast<Function>(ref);
       auto res = GenVTAFunc(func);
+
       auto code = code_stream_.str();
-      String symbol = std::get<0>(res);
+      Array<String> symbol = {std::get<0>(res)};
       Array<String> vars = std::get<1>(res);
       const auto* pf = runtime::Registry::Get("runtime.CSourceModuleCreate");
       CHECK(pf != nullptr) << "Cannot find csource module to create the external runtime module";
+
       return (*pf)(code, "c", symbol, vars);
     }
   private:
@@ -647,4 +655,6 @@ TVM_REGISTER_GLOBAL("relay.ext.vta_matmul").set_body_typed(VTAMatMulCompiler);
 
 }  // namespace contrib
 }  // namespace relay
+
 }  // namespace tvm
+

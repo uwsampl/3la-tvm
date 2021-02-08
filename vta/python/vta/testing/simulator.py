@@ -102,21 +102,33 @@ def dump_mode(toggle):
     Parameters
     ----------
     toggle : bool
-        Whether to dump logs and memory instead of executing
+        Whether to dump logs and memory
         (false by default)
     """
     tvm.get_global_func("vta.simulator.profiler_dump_mode")(1 if toggle else 0)
 
 
-def dump_target(target):
-    """Specify address for simulator dump.
+def sim_dump_target(target):
+    """Specify address for simulator initial state dump.
     Parameters
     ----------
     target : str
         Address to which the simulator will write a log
-        and memory dump if dumping mode is on.
+        and memory dump corresponding to the initial state
+        if dumping mode is on.
     """
     tvm.get_global_func("vta.simulator.profiler_dump_target")(target)
 
+
+def output_dump_target(target):
+    """Specify address for simulator output dump.
+    Parameters
+    ----------
+    target : str
+        Address to which the simulator will write a log
+        and memory dump corresponding to
+        all stores to DRAM if dumping mode is on.
+    """
+    tvm.get_global_func("vta.simulator.profiler_output_dump_target")(target)
 
 LIBS = _load_sw()
