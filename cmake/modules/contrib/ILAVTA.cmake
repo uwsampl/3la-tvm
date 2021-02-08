@@ -6,7 +6,14 @@ if(USE_ILAVTA_CODEGEN STREQUAL "ON")
   list(APPEND COMPILER_SRCS ${JSON_RELAY_CONTRIB_SRC})
 
   file(GLOB ILAVTA_CONTRIB_SRC src/runtime/contrib/ilavta/ilavta_runtime.cc)
+  file(GLOB VTA_RUNTIME_SRCS ${VTA_HW_PATH}/src/*.cc)
+  list(APPEND VTA_RUNTIME_SRCS ${VTA_HW_PATH}/src/sim/sim_driver.cc)
+  list(APPEND VTA_RUNTIME_SRCS ${VTA_HW_PATH}/src/sim/sim_tlpp.cc)
+  list(APPEND VTA_RUNTIME_SRCS ${VTA_HW_PATH}/src/vmem/virtual_memory.cc)
+  
   list(APPEND RUNTIME_SRCS ${ILAVTA_CONTRIB_SRC})
+  list(APPEND RUNTIME_SRCS ${VTA_RUNTIME_SRCS})
+  
   set(VTA_CONFIG ${PYTHON} ${VTA_HW_PATH}/config/vta_config.py)
 
   if(EXISTS ${CMAKE_CURRENT_BINARY_DIR}/vta_config.json)
