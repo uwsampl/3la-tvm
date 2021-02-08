@@ -176,6 +176,9 @@ class ILAVTARuntime : public JSONRuntimeBase {
     CHECK(symbol_name_.substr(0, 6) == "ilavta");
     LOG(INFO) << "[Runtime] enter " << symbol_name_ << " runtime";
 
+    auto dump_toggle_fn = runtime::Registry::Get("vta.simulator.profiler_dump_mode");
+    CHECK(dump_toggle_fn != nullptr) << "Cannot get profiler_dump_mode toggle";
+
     if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.dense") {
       LOG(INFO) << "[Runtime] off-lading ilavta.dense";
       // assume there're only two inputs for now

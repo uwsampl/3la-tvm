@@ -16,7 +16,7 @@ def _register_external_op_helper(op_name, supported=True):
         A function that returns if the operator is translated to ILA.
     """
     @tvm.ir.register_op_attr(op_name, "target.ilavta")
-    def _func_wrapper(attrs, args):
+    def _func_wrapper(attrs, *args):
         return supported
 
     return _func_wrapper
@@ -25,6 +25,7 @@ def _register_external_op_helper(op_name, supported=True):
 _register_external_op_helper("nn.conv2d")
 _register_external_op_helper("nn.batch_matmul")
 _register_external_op_helper("add")
+_register_external_op_helper("nn.dense")
 
 
 def make_pattern_conv2d():

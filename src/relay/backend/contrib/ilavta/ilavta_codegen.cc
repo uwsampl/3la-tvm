@@ -83,6 +83,7 @@ runtime::Module ILAVTACompiler(const ObjectRef& ref) {
   const auto* pf = runtime::Registry::Get("runtime.ILAVTARuntimeCreate");
   CHECK(pf != nullptr) << "Cannot find ILAVTA runtime module to create";
   auto mod = (*pf)(func_name, graph_json, params);
+  LOG(INFO) << "Module created";
   return mod;
 }
 
