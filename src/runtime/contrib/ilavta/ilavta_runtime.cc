@@ -19,6 +19,10 @@ namespace contrib {
 using namespace tvm::runtime;
 using namespace tvm::runtime::json;
 
+const int64_t SIM_DUMP = 1;
+const std::string RAW_DUMP = "vta_sim_dump.json";
+const std::string OUTPUT_DUMP = "vta_output_dump.json";
+
 /*
 * Code adopted from https://github.com/apache/tvm-vta/blob/main/tests/hardware/common/test_lib.cc
 * */
@@ -178,6 +182,13 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
     auto dump_toggle_fn = runtime::Registry::Get("vta.simulator.profiler_dump_mode");
     CHECK(dump_toggle_fn != nullptr) << "Cannot get profiler_dump_mode toggle";
+    std::vector<TVMValue> values(10);
+    std::vector<int> codes(10);
+    runtime::TVMArgsSetter setter(values.data(), codes.data());
+    setter(0, 1L);
+    TVMRetValue rv;
+    TVMArgs arg(values.data(), codes.data(), 5);
+    dump_toggle_fn->CallPacked(arg, &rv);
 
     if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.dense") {
       LOG(INFO) << "[Runtime] off-lading ilavta.dense";
