@@ -8,6 +8,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <fstream>
 
 #include "../json/json_node.h"
 #include "../json/json_runtime.h"
@@ -199,7 +200,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       auto wgt_eid = EntryID(input_nodes_[1], 0);
       auto& wgt_node_data = data_entry_[wgt_eid];
 
-# if 1
+# if 0
       for (int i = 0; i < input_nodes_.size(); ++i) {
         auto eid = EntryID(input_nodes_[0], 0);
         for (int dim = 0; dim < data_entry_[eid]->ndim; ++dim) {
@@ -245,7 +246,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
             // zero padding
             input_buf[i * in_channels + j] = 0;
           } else {
-            input_buf[i * in_channels + j] = input[i * in_channels + j];
+            input_buf[i * in_channels + j] = input[i * n_inp_cols + j];
           }
         }
       }
@@ -285,7 +286,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
                 // zero padding
                 wgt_buf[wgt_ptr_x * in_channels + wgt_ptr_y] = 0;
               } else {
-                wgt_buf[wgt_ptr_x * in_channels + wgt_ptr_y] = weight[x * in_channels + y];
+                wgt_buf[wgt_ptr_x * in_channels + wgt_ptr_y] = weight[x * n_wgt_cols + y];
               }
               wgt_ptr_y++;
               if (wgt_ptr_y == in_channels) {
@@ -296,6 +297,15 @@ class ILAVTARuntime : public JSONRuntimeBase {
           }
         }
       }
+
+#if 0
+      for (int i = 0; i < out_channels; ++i) {
+        for (int j = 0; j < in_channels; ++j) {
+          std::cerr << (int)(wgt_buf[i * in_channels + j]) << " ";
+        }
+        std::cerr << std::endl;
+      }
+#endif
 
       for (int i = 0; i < batch * out_channels; ++i) {
         acc_buf[i] = 0;
@@ -357,11 +367,63 @@ class ILAVTARuntime : public JSONRuntimeBase {
       CHECK(ret == 0) << "Failed to produce program fragment";
       
       std::system("vta_ila_sim ilavta_dense");
-      ret = std::system("stat ./result/ila_vta_dense_out.json");
+      ret = std::system("stat ./result/ilavta_dense_out.json > /dev/null 2> /dev/null");
       CHECK(ret == 0) << "Not output result found";
-    }
+      
+      auto output_node_id = outputs_[0].id_;
+      auto output_data = data_entry_[output_node_id];
 
-    if (outputs_.size() == 1 &&
+      CHECK(output_data->ndim == 2) << "Output dimension error: " << "expected 2, actual " << output_data->ndim;
+
+      LOG(INFO) << "[Runtime] Copy back simulation result";
+      std::ifstream input_stream("./result/ilavta_dense_out.json");
+      dmlc::JSONReader reader(&input_stream);
+
+      auto buf_size = GetDataSize(*output_data);
+      int8_t* buffer = new int8_t[buf_size];
+      std::vector<std::unordered_map<std::string, std::string> > out_values;
+      std::unordered_map<std::string, std::string> value;
+      std::string key;
+      std::string addr;
+      std::string data;
+      
+      reader.BeginArray();
+      while (reader.NextArrayItem()) {
+        reader.Read(&value);
+        out_values.push_back(value);
+      }
+
+      CHECK(out_values.size() == output_size * VTA_BLOCK_OUT) << "Output element size mismatch: " << output_size * VTA_BLOCK_OUT << " v.s. " << buf_size;
+      
+      auto& out_shape = output_data->shape;
+      size_t out_h = out_shape[0];
+      size_t out_w = out_shape[1];
+
+      CHECK(out_h == n_inp_rows);
+      CHECK(out_w == n_wgt_rows);
+
+      size_t data_cur = 0;
+      size_t buf_cur = 0;
+      uint32_t temp;
+
+      LOG(INFO) << "[Copying] from output json to byte buffer"; 
+      for (size_t i = 0; i < out_h; ++i) {
+        if (data_cur % VTA_BLOCK_OUT != 0) {
+          data_cur = (data_cur / VTA_BLOCK_OUT + 1) * VTA_BLOCK_OUT;
+        }
+        for (size_t j = 0; j < out_w; ++j) {
+          auto val = out_values[data_cur++]["data"];
+          std::stringstream ss;
+          ss << std::hex << val;
+          ss >> temp;
+          // LOG(INFO) << "Copying " << out_values[data_cur - 1]["addr"] << ": " << val << " == " << temp;
+          buffer[buf_cur++] = static_cast<int8_t>(temp);
+        }
+      }
+
+      CHECK(buf_cur == buf_size) << "Number read differs from expected buffer size: " << buf_cur << " v.s. " << buf_size;
+      memcpy(reinterpret_cast<int8_t*>(output_data->data), buffer, sizeof(int8_t) * buf_size);
+    } else if (outputs_.size() == 1 &&
         nodes_[outputs_[0].id_].GetOpName() == "ilavta.batch_matmul") {
       LOG(INFO) << "[Runtime] off-loading ilavta.batch_matmul";
 
