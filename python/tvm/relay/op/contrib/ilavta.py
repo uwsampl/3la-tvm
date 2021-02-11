@@ -24,7 +24,7 @@ def _register_external_op_helper(op_name, supported=True):
 
 _register_external_op_helper("nn.conv2d")
 _register_external_op_helper("nn.batch_matmul")
-_register_external_op_helper("add")
+# _register_external_op_helper("add")
 _register_external_op_helper("nn.dense")
 
 
