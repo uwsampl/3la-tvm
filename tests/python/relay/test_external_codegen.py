@@ -347,42 +347,6 @@ def test_extern_dnnl_const():
     ref_res = ref_ex.evaluate()(i_data)
     check_result(mod, {"data0": i_data}, (1, 32, 14, 14), ref_res.asnumpy(), tol=1e-5)
 
-def test_extern_vta():
-    if not tvm.get_global_func("relay.ext.vta_matmul", True):
-        print('VTA ILA codegen not supported')
-
-    vta.testing.simulator.dump_mode(True)
-    dtype = 'float32'
-    ishape = (16, 16)
-    wshape = (16, 16)
-
-    data = relay.var('data', shape=(ishape), dtype=dtype)
-    weight = relay.var('weight', shape=(wshape), dtype=dtype)
-
-    data_1 = relay.log(data)
-    o1 = relay.multiply(data_1, relay.const(np.random.uniform(1, 1, ishape)))
-
-    out = relay.nn.dense(o1, weight) # relay.Call(dense_func, [o1])
-    f = relay.Function([data, weight], out)
-    inputs = relay.var('input', shape=ishape, dtype=dtype)
-    weights = relay.var('w', shape=wshape, dtype=dtype)
-    call = relay.Call(f, [inputs, weights])
-
-    mod = tvm.IRModule()
-    mod['main'] = f
-    mod = relay.transform.InferType()(mod)
-    mod = tvm.IRModule.from_expr(call)
-    seq = tvm.transform.Sequential([transform.AnnotateTarget('vta_matmul'),
-                                    transform.PartitionGraph()])
-    mod = seq(mod)
-    in_data = np.array([math.e] * ishape[0] * ishape[1]).reshape(ishape).astype(dtype)
-    w_data = (np.arange(wshape[0] * wshape[1]) % 10).reshape(wshape).astype(dtype)
-    check_result(mod, {
-        'input' : in_data,
-        'w': w_data
-    }, (16, 16), np.matmul(np.array([1] * 16 * 16).reshape(ishape).astype(dtype),
-                 np.transpose(w_data)).astype(dtype), use_graph_rt=False)
-
 if __name__ == "__main__":
     test_multi_node_subgraph()
     test_extern_gcc_single_op()
@@ -391,4 +355,3 @@ if __name__ == "__main__":
     test_extern_gcc_consts()
     test_extern_dnnl()
     test_extern_dnnl_const()
-    test_extern_vta()
