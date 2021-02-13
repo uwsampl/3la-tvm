@@ -400,7 +400,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       size_t out_w = out_shape[1];
 
       CHECK(out_h == n_inp_rows);
-      CHECK(out_w == n_wgt_rows);
+      CHECK(out_w == n_wgt_rows) << "Dimension mismatch: " << out_w << "; expected " << n_wgt_rows;
 
       size_t data_cur = 0;
       size_t buf_cur = 0;
