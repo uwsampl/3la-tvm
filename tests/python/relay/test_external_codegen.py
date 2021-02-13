@@ -28,7 +28,7 @@ import tvm.relay.transform
 from tvm import relay
 from tvm.relay import transform
 from tvm import runtime
-from tvm.contrib import util
+from tvm.contrib import utils
 import vta
 import vta.testing
 
@@ -56,9 +56,9 @@ def check_result(mod, map_inputs, out_shape, result, tol=1e-5, target="llvm", ct
                              f'-I{tvm_home}/src/runtime/contrib',
                              f"-I{tvm_home}/3rdparty/vta-hw/include"] \
                           + [f'-D{"VTA_" + x}={y}' for (x, y) in filter(lambda pi: 'LOG' in pi[0], vta_config.items())]
-        # kwargs["options"].append(f'-DVTA_LOG_BLOCK_IN={vta_config["LOG_BLOCK"]}')
-        # kwargs["options"].append(f'-DVTA_LOG_BLOCK_OUT={vta_config["LOG_BLOCK"]}')
-        tmp_path = util.tempdir()
+        kwargs["options"].append(f'-DVTA_LOG_BLOCK_IN={vta_config["LOG_BLOCK"]}')
+        kwargs["options"].append(f'-DVTA_LOG_BLOCK_OUT={vta_config["LOG_BLOCK"]}')
+        tmp_path = utils.tempdir()
         lib_name = "lib.so"
         lib_path = tmp_path.relpath(lib_name)
         lib.export_library(lib_path, fcompile=False, **kwargs)
@@ -238,6 +238,39 @@ def test_extern_gcc():
     check_result(mod, {"x": x_data, "y": y_data}, (2, 2), (y_data * y_data) - (x_data + x_data))
 
 
+def test_extern_gcc_consts():
+    @tvm._ffi.register_func("relay.ext.ccompiler.constant_updater")
+    def constant_updater(expr, symbol):
+        """A dummy constant updater just to test that a custom one works."""
+        return {"ccompiler_0_p0": tvm.nd.array(y0_data)}
+
+    x = relay.var("x", shape=(8, 8))
+    y0_data = np.random.uniform(0, 1, (8, 8)).astype("float32")
+
+    x0 = relay.var("x0", shape=(8, 8))
+    y0_const = relay.const(y0_data, "float32")
+    z = x0 + y0_const
+    f = relay.Function([x0], z)
+    f = set_external_func_attr(f, "ccompiler", "ccompiler_0")
+    call = relay.Call(f, [x])
+    mod = tvm.IRModule.from_expr(call)
+
+    with tvm.transform.PassContext(opt_level=3, disabled_pass=["AlterOpLayout"]):
+        compiler = relay.backend.vm.VMCompiler()
+        compiler.lower(mod, "llvm")
+        compiler.codegen()
+        params = compiler.get_params()
+        assert len(params) == 1
+        assert "ccompiler_0_p0" in params.keys()
+
+    with tvm.transform.PassContext(opt_level=3, disabled_pass=["AlterOpLayout"]):
+        _, _, params = relay.build(mod, target="llvm")
+        assert len(params) == 1
+        assert "ccompiler_0_p0" in params.keys()
+
+    tvm._ffi.registry.remove_global_func("relay.ext.ccompiler.constant_updater")
+
+
 def test_extern_dnnl():
     if not tvm.get_global_func("relay.ext.dnnl", True):
         print("skip because DNNL codegen is not available")
@@ -355,6 +388,7 @@ if __name__ == "__main__":
     test_extern_gcc_single_op()
     test_extern_gcc_single_op_int()
     test_extern_gcc()
+    test_extern_gcc_consts()
     test_extern_dnnl()
     test_extern_dnnl_const()
     test_extern_vta()

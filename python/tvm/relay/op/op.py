@@ -19,9 +19,8 @@
 import tvm._ffi
 import tvm.ir
 from tvm.driver import lower, build
-
-from ...target import get_native_generic_func, GenericFunc
-from ...runtime import Object
+from tvm.target import get_native_generic_func, GenericFunc
+from tvm.runtime import Object
 from . import _make
 
 
