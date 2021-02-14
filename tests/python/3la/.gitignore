@@ -1,3 +1,4 @@
 ./*.json
 prog_frag/*
 result/*
+./*.txt

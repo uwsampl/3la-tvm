@@ -192,7 +192,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
     dump_toggle_fn->CallPacked(arg, &rv);
 
     if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.dense") {
-      LOG(INFO) << "[Runtime] off-lading ilavta.dense";
+      LOG(INFO) << "[Runtime] off-loading ilavta.dense";
       // assume there're only two inputs for now
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto& input_node_data = data_entry_[input_eid];
