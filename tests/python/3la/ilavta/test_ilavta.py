@@ -39,6 +39,7 @@ def compare_ref(output, ref):
     diff = np.abs(output - ref)
     mean_diff = sum(diff) / diff.size
     print('[Result] Mean difference {}'.format(mean_diff))
+    print('[Result] All Close?: {}'.format(np.allclose(output, ref)))
 
 def test_dense_impl(in_dim, w_dim, func_ref = lambda inp, wgt: np.matmul(inp, wgt.transpose())):
     check_global_func()
