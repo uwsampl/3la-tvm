@@ -1,5 +1,4 @@
 import tvm
-import vta
 import numpy as np
 from tvm.relay.op.contrib import ilavta
 from tvm.contrib import graph_runtime
@@ -35,12 +34,6 @@ def run_module(mod, *inputs):
     print('[Python] Done')
     return output
 
-def compare_ref(output, ref):
-    diff = np.abs(output - ref)
-    mean_diff = sum(diff) / diff.size
-    print('[Result] Mean difference {}'.format(mean_diff))
-    print('[Result] All Close?: {}'.format(np.allclose(output, ref)))
-
 def test_dense_impl(in_dim, w_dim, func_ref = lambda inp, wgt: np.matmul(inp, wgt.transpose())):
     check_global_func()
     dtype = 'int8'
@@ -62,7 +55,7 @@ def test_dense_impl(in_dim, w_dim, func_ref = lambda inp, wgt: np.matmul(inp, wg
 
     ref = func_ref(inp, wgt) 
     output = run_module(mod, inp, wgt).astype(dtype)
-    compare_ref(output, ref)
+    np.allclose(output, ref)
 
 
 def test_nested_dense(*shapes):
@@ -88,7 +81,7 @@ def test_nested_dense(*shapes):
     ref = np.matmul(p, q.transpose())
     
     output = run_module(mod, *inputs).astype(np.int8)
-    compare_ref(output, ref)
+    np.allclose(output, ref)
 
 def test_dense_subgraph(in_dim, wgt_dim):
     dtype = 'int8'
@@ -121,7 +114,7 @@ def test_dense_subgraph(in_dim, wgt_dim):
     output = run_module(mod, v_inp, v_wgt).astype(np.int8)
     ref = func_ref(v_inp, v_wgt).astype(np.int8)
 
-    compare_ref(output, ref)
+    np.allclose(output, ref)
 
 def test_dense():
     for batch in [8, 16, 32, 64]:
