@@ -43,11 +43,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
       if (!(name == "ilavta.conv2d" || name == "ilavta.batch_matmul" || name == "ilavta.dense")) {
         LOG(FATAL) << "Unrecognized pattern: " << name;
       }
-      if (name == "ilavta.conv2d") {
-        //
-      } else if (name == "ilavta.batch_matmul") {
-        //
-      } else if (name == "ilavta.dense") {
+      if (name == "ilavta.dense") {
         //
       } 
     } else {
@@ -64,7 +60,6 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
     auto node = std::make_shared<JSONGraphNode>(name,     /* name_ */
                                                 "kernel", /* op_type_ */
                                                 inputs, 1 /* num_outputs_ */);
-    // SetCallNodeAttribute(node, call);
     return AddNode(node, GetRef<Expr>(cn));
   }
 
