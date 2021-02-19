@@ -191,6 +191,11 @@ class ILAVTARuntime : public JSONRuntimeBase {
     TVMArgs arg(values.data(), codes.data(), 5);
     dump_toggle_fn->CallPacked(arg, &rv);
 
+    auto op_name = nodes_[outputs_[0].id_].GetOpName();
+    if (op_name != "ilavta.dense") {
+      LOG(FATAL) << "Unknown pattern " << symbol_name_;
+    }
+
     if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.dense") {
       LOG(INFO) << "[Runtime] off-loading ilavta.dense";
       // assume there're only two inputs for now
@@ -366,7 +371,9 @@ class ILAVTARuntime : public JSONRuntimeBase {
       ret = std::system("python3 produce_ila_fragment.py vta_sim_dump.json ./prog_frag/ilavta_dense_input.json");
       CHECK(ret == 0) << "Failed to produce program fragment";
       
-      std::system("vta_ila_sim ilavta_dense");
+      ret = std::system("vta_ila_sim ilavta_dense");
+      CHECK(ret == 0) << "Failed to run ILA simulator";
+
       ret = std::system("stat ./result/ilavta_dense_out.json > /dev/null 2> /dev/null");
       CHECK(ret == 0) << "Not output result found";
       
@@ -393,14 +400,14 @@ class ILAVTARuntime : public JSONRuntimeBase {
         out_values.push_back(value);
       }
 
-      CHECK(out_values.size() == output_size * VTA_BLOCK_OUT) << "Output element size mismatch: " << output_size * VTA_BLOCK_OUT << " v.s. " << buf_size;
+      CHECK(out_values.size() == static_cast<size_t>(output_size * VTA_BLOCK_OUT)) << "Output element size mismatch: " << output_size * VTA_BLOCK_OUT << " v.s. " << buf_size;
       
       auto& out_shape = output_data->shape;
       size_t out_h = out_shape[0];
       size_t out_w = out_shape[1];
 
-      CHECK(out_h == n_inp_rows);
-      CHECK(out_w == n_wgt_rows) << "Dimension mismatch: " << out_w << "; expected " << n_wgt_rows;
+      CHECK(out_h == static_cast<size_t>(n_inp_rows));
+      CHECK(out_w == static_cast<size_t>(n_wgt_rows)) << "Dimension mismatch: " << out_w << "; expected " << n_wgt_rows;
 
       size_t data_cur = 0;
       size_t buf_cur = 0;
@@ -423,8 +430,6 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
       CHECK(buf_cur == buf_size) << "Number read differs from expected buffer size: " << buf_cur << " v.s. " << buf_size;
       memcpy(reinterpret_cast<int8_t*>(output_data->data), buffer, sizeof(int8_t) * buf_size);
-    } else {
-      LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
   }
 
