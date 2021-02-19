@@ -1,3 +1,10 @@
+# Required directories / files for running this test:
+# - Make sure `produce_ila_fragment.py` (https://github.com/uwsampl/3la-vta-testbench/blob/main/test/produce_ila_fragment.py)
+#   is under the directory where this script is being called
+# - Make sure `vta.testing.ila_converter` presents in the vta python library
+# - Create two directories named `prog_frag` and `result` under the directory where this script is being called
+#
+# This script can be called after creating the two directories under `3la-vta-testbench/test` (https://github.com/uwsampl/3la-vta-testbench/tree/main/test)
 import tvm
 import numpy as np
 from tvm.relay.op.contrib import ilavta
