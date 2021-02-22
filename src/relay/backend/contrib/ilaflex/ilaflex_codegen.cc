@@ -26,8 +26,7 @@ class ILAFlexJSONSerializer : public backend::contrib::JSONSerializer {
   using JSONGraphNodeEntry = tvm::runtime::json::JSONGraphNodeEntry;
 
  public:
-  ILAFlexJSONSerializer(const std::string& symbol, const Expr& expr)
-      : JSONSerializer(symbol, expr) {}
+  ILAFlexJSONSerializer(const std::string& symbol, const Expr& expr) : JSONSerializer(symbol, expr) {}
 
   std::vector<JSONGraphNodeEntry> VisitExpr_(const CallNode* cn) override {
     Expr expr = GetRef<Expr>(cn);
@@ -41,9 +40,7 @@ class ILAFlexJSONSerializer : public backend::contrib::JSONSerializer {
           << "JSON runtime only supports composite functions.";
       name = comp.value();
 
-      if (name == "ilaflex.linear") {
-        // empty - JIT
-      } else {
+      if (name != "ilaflex.linear" && name != "ilaflex.lstm") {
         LOG(FATAL) << "Unrecognized pattern: " << name;
       }
     } else {
@@ -63,7 +60,6 @@ class ILAFlexJSONSerializer : public backend::contrib::JSONSerializer {
     // SetCallNodeAttribute(node, call);
     return AddNode(node, GetRef<Expr>(cn));
   }
-
 };  // class ILAFlexJSONSerializer
 
 runtime::Module ILAFlexCompiler(const ObjectRef& ref) {
