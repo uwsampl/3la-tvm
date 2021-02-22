@@ -529,8 +529,8 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int8_t* out_buf   = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * batch * in_channels, 0));
       VTADeviceHandle device = VTADeviceAlloc();
 
-      auto input = reinterpret_cast<int32_t*>(input_data->data);
-      auto bias  = reinterpret_cast<int32_t*>(bias_data->data);
+      auto input = reinterpret_cast<int8_t*>(input_data->data);
+      auto bias  = reinterpret_cast<int8_t*>(bias_data->data);
       for (int i = 0; i < batch; ++i) {
         for (int j = 0; j < in_channels; ++j) {
           if (i >= n_inp_rows || j >= n_inp_cols) {
@@ -595,13 +595,13 @@ class ILAVTARuntime : public JSONRuntimeBase {
       ila_output_data out_data;
       readILAOutput(output_file, out_data);
 
-      int8_t* buffer = new int8_t[output_buffer_size / 4];
+      int8_t* buffer = new int8_t[output_buffer_size];
 
       auto buf_read = loadILAOutput(out_data, buffer, n_inp_rows, n_inp_cols);
       // We are reading int8 but the buffer is calculated using int32
-      CHECK(buf_read * 4 == output_buffer_size) << "Output size mismatch: " << buf_read << " v.s. " << output_buffer_size;
+      CHECK(buf_read == output_buffer_size) << "Output size mismatch: " << buf_read << " v.s. " << output_buffer_size;
       // memcpy(reinterpret_cast<int8_t*>(output_data->data), buffer, sizeof(int8_t) * buf_read);
-      int32_t* o_data = reinterpret_cast<int32_t*>(output_data->data);
+      int8_t* o_data = reinterpret_cast<int8_t*>(output_data->data);
       for (size_t i = 0; i < buf_read; ++i) {
         o_data[i] = buffer[i];
       }
