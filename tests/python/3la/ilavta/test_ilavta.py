@@ -141,7 +141,7 @@ def test_dense():
                 test_dense_subgraph(in_dim, wgt_dim)
 
 def test_bias_add_impl(in_dim, bias_dim):
-    input_dtype = 'int32'
+    input_dtype = 'int8'
     output_dtype = 'int8'
 
     data_shape = tvm.relay.TensorType(in_dim, dtype=input_dtype)
@@ -164,7 +164,7 @@ def test_bias_add_impl(in_dim, bias_dim):
         return z
     
     out_data = run_module(mod, inputs_data, bias_data).astype(np.int8)
-    ref = func_ref(inputs_data, bias_data)
+    ref = func_ref(inputs_data, bias_data).astype(np.int8)
     
     assert np.allclose(out_data, ref)
 
