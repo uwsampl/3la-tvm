@@ -222,7 +222,7 @@ std::string runILASimulator(const std::string exp_name) {
   ret = std::system(("python3 produce_ila_fragment.py vta_sim_dump.json ./prog_frag/" + input_filename).c_str());
   CHECK(ret == 0) << "Failed to produce program fragment";
   
-  ret = std::system("vta_ila_sim ilavta_dense");
+  ret = std::system(("vta_ila_sim " + exp_name).c_str());
   CHECK(ret == 0) << "Failed to run ILA simulator";
 
   ret = std::system(("stat ./result/" + output_filename + " > /dev/null 2> /dev/null").c_str());
@@ -297,7 +297,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
     dump_toggle_fn->CallPacked(arg, &rv);
 
     auto op_name = nodes_[outputs_[0].id_].GetOpName();
-    if (op_name != "ilavta.dense") {
+    if (op_name != "ilavta.dense" && op_name != "ilavta.bias_add") {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
 
@@ -488,7 +488,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
       CHECK(bufsize_read == buf_size) << "Number read differs from expected buffer size: " << bufsize_read << " v.s. " << buf_size;
       memcpy(reinterpret_cast<int8_t*>(output_data->data), buffer, sizeof(int8_t) * buf_size);
-    } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.dense") {
+    } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.bias_add") {
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto bias_eid = EntryID(input_nodes_[1], 0);
       auto output_eid = outputs_[0].id_;
@@ -503,10 +503,8 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
       auto n_inp_rows = input_data->shape[0];
       auto n_inp_cols = input_data->shape[1];
-      auto n_bias_rows = bias_data->shape[0];
-      auto n_bias_cols = bias_data->shape[1];
+      auto n_bias_cols = bias_data->shape[0];
 
-      CHECK(n_bias_rows == 1) << "Bias add only does vector broadcasting";
       CHECK(n_bias_cols == n_inp_cols) << "Dimension mismatch between input and bias";
       CHECK(n_inp_rows == output_data->shape[0]);
       CHECK(n_inp_cols == output_data->shape[1]);
@@ -531,6 +529,8 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int8_t* out_buf   = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * batch * in_channels, 0));
       VTADeviceHandle device = VTADeviceAlloc();
 
+      auto input = reinterpret_cast<int8_t*>(input_data->data);
+      auto bias  = reinterpret_cast<int8_t*>(bias_data->data);
       for (int i = 0; i < batch; ++i) {
         for (int j = 0; j < in_channels; ++j) {
           if (i >= n_inp_rows || j >= n_inp_cols) {
@@ -538,13 +538,13 @@ class ILAVTARuntime : public JSONRuntimeBase {
             input_buf[i * in_channels + j] = 0;
             bias_buf[i * in_channels + j] = 0;
           } else {
-            input_buf[i * in_channels + j] = 10;
+            input_buf[i * in_channels + j] = input[i * n_inp_cols + j];
           }
         }
       }
 
       for (int i = 0; i < in_channels; ++i) {
-        bias_buf[i] = 1;
+        bias_buf[i] = bias[i];
       }
 
       VTAUop* uop_buf   = getBiasAddUops(batch / VTA_BATCH, in_channels / VTA_BLOCK_IN);
@@ -594,7 +594,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int8_t* buffer = new int8_t[output_buffer_size];
 
       auto buf_read = loadILAOutput(out_data, buffer, n_inp_rows, n_inp_cols);
-      CHECK(buf_read == output_buffer_size);
+      // CHECK(buf_read == output_buffer_size) << "Output size mismatch: " << buf_read << " v.s. " << output_buffer_size;
       memcpy(reinterpret_cast<int8_t*>(output_data->data), buffer, sizeof(int8_t) * output_buffer_size);
     }
   }
