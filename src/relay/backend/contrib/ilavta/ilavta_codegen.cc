@@ -40,12 +40,14 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
       CHECK(comp.defined())
           << "JSON runtime only supports composite functions.";
       name = comp.value();
-      if (!(name == "ilavta.conv2d" || name == "ilavta.batch_matmul" || name == "ilavta.dense")) {
+      if (!(name == "ilavta.conv2d" || name == "ilavta.bias_add" || name == "ilavta.dense")) {
         LOG(FATAL) << "Unrecognized pattern: " << name;
       }
       if (name == "ilavta.dense") {
-        //
-      } 
+        LOG(INFO) << "ilavta.dense pattern";
+      }  else if (name == "ilavta.bias_add") {
+        LOG(INFO) << "ilavta.bias_add pattern";
+      }
     } else {
       LOG(FATAL) << "ILAVTA runtime does not support calls to "
                  << cn->op->GetTypeKey();

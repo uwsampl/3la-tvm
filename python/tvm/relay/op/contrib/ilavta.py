@@ -24,7 +24,7 @@ def _register_external_op_helper(op_name, supported=True):
 
 # _register_external_op_helper("nn.conv2d")
 # _register_external_op_helper("nn.batch_matmul")
-# _register_external_op_helper("add")
+_register_external_op_helper("nn.bias_add")
 _register_external_op_helper("nn.dense")
 
 
@@ -45,10 +45,16 @@ def make_pattern_dense():
     b = wildcard()
     return is_op('nn.dense')(a, b)
 
+def make_pattern_bias_add():
+    data = wildcard()
+    bias = wildcard()
+    return is_op('nn.bias_add')(data, bias)
+
 @register_pattern_table("ilavta")
 def pattern_table():
     conv2d_pat = ("ilavta.conv2d", make_pattern_conv2d())
     matmul_pat = ("ilavta.batch_matmul", make_pattern_batch_matmul())
     dense_pat  = ("ilavta.dense", make_pattern_dense())  
-    ilavta_patterns = [conv2d_pat, matmul_pat, dense_pat]
+    bias_add_pat = ("ilavta.bias_add", make_pattern_bias_add())
+    ilavta_patterns = [conv2d_pat, matmul_pat, dense_pat, bias_add_pat]
     return ilavta_patterns
