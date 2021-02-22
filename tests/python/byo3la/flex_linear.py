@@ -8,7 +8,7 @@ from tvm import rpc
 # from tvm.contrib import util
 from tvm.relay.op.contrib import ilaflex
 
-from utils import tool
+#from utils import tool
 
 # define the graph
 dtype="float32"
@@ -72,10 +72,10 @@ output = runtime_exec.get_output(0).asnumpy()
 output = output.astype(np.float32)
 print("[Python] Done")
 
-tl = tool()
-err_out, err_ref = tl.cal_error(output, ref)
-# print(err_out, err_ref)
-print("relative error: {:5.5%} vs. output, {:5.5%} vs. ref".format(err_out, err_ref))
+# tl = tool()
+# err_out, err_ref = tl.cal_error(output, ref)
+# # print(err_out, err_ref)
+# print("relative error: {:5.5%} vs. output, {:5.5%} vs. ref".format(err_out, err_ref))
 print('output: {}'.format(output.shape))
 print(output)
 print('===============')
