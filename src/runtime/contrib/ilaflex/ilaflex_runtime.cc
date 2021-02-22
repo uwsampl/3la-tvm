@@ -36,6 +36,10 @@ class ILAFlexRuntime : public JSONRuntimeBase {
     CHECK(symbol_name_.substr(0, 7) == "ilaflex") << symbol_name_;
     LOG(INFO) << "[Runtime] enter " << symbol_name_ << " runtime";
 
+    // TODO: we should probably package up all the files inside TVM
+    // to avoid having to refer to other directories
+    std::string driver_dir = "~/3la_ILA_tensor_op/flexnlp";
+
     if (outputs_.size() == 1 && input_nodes_.size() == 3 &&
         nodes_[outputs_[0].id_].GetOpName() == "ilaflex.linear") {
       /*
@@ -122,11 +126,12 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       int is_bias = 1;
 
       // call ILAng-generated simulator
-      std::string call_cmd = "python3 linear_layer_driver.py " + 
-                             std::to_string(num_vector_in) + " " +
-                             std::to_string(num_vector_out) + " " +
-                             std::to_string(num_timestep) + " " +
-                             std::to_string(is_bias);
+      std::stringstream call_builder;
+      call_builder << "python3 " << driver_dir << "/linear_layer_driver.py "
+                   << num_vector_in << " " << num_vector_out << " "
+                   << num_timestep << " " << is_bias;
+      std::string call_cmd = call_builder.str();
+
       // std::string command = "echo \"call assembly helper\"";
       std::system("echo \"calling flexnlp linear layer driver\"");
       auto res = std::system(call_cmd.c_str());
@@ -148,6 +153,9 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       std::copy(o_data_ptr, o_data_ptr + o_data_size,
                 reinterpret_cast<float*>(node_data_o->data));
 
+    } else if (outputs_.size() == 1
+               && nodes_[outputs_[0].id_].GetOpName() == "ilaflex.lstm") {
+      LOG(FATAL) << "LSTM not yet implemented " << symbol_name_;
     } else {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
