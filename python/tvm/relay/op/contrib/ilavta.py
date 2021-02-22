@@ -50,7 +50,6 @@ def make_pattern_bias_add():
     bias = wildcard()
     return is_op('nn.bias_add')(data, bias)
 
-
 @register_pattern_table("ilavta")
 def pattern_table():
     conv2d_pat = ("ilavta.conv2d", make_pattern_conv2d())
