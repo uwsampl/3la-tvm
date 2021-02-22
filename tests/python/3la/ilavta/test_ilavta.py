@@ -62,7 +62,7 @@ def test_dense_impl(in_dim, w_dim, func_ref = lambda inp, wgt: np.matmul(inp, wg
 
     ref = func_ref(inp, wgt) 
     output = run_module(mod, inp, wgt).astype(dtype)
-    np.allclose(output, ref)
+    assert np.allclose(output, ref)
 
 
 def test_nested_dense(*shapes):
@@ -88,7 +88,7 @@ def test_nested_dense(*shapes):
     ref = np.matmul(p, q.transpose())
     
     output = run_module(mod, *inputs).astype(np.int8)
-    np.allclose(output, ref)
+    assert np.allclose(output, ref)
 
 def test_dense_subgraph(in_dim, wgt_dim):
     dtype = 'int8'
@@ -121,7 +121,7 @@ def test_dense_subgraph(in_dim, wgt_dim):
     output = run_module(mod, v_inp, v_wgt).astype(np.int8)
     ref = func_ref(v_inp, v_wgt).astype(np.int8)
 
-    np.allclose(output, ref)
+    assert np.allclose(output, ref)
 
 def test_dense():
     for batch in [8, 16, 32, 64]:
@@ -164,9 +164,9 @@ def test_bias_add_impl(in_dim, bias_dim):
         return z
     
     out_data = run_module(mod, inputs_data, bias_data).astype(np.int8)
-    ref = func_ref(inputs_data, bias_data).astype(np.int8)
+    ref = func_ref(inputs_data, bias_data)
     
-    np.allclose(out_data, ref)
+    assert np.allclose(out_data, ref)
 
 def test_bias_add():
     for batch in [8, 16, 32, 64]:
