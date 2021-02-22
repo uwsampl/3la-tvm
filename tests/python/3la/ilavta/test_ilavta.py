@@ -140,6 +140,43 @@ def test_dense():
                 print('[Case] Dense in Subgraph')
                 test_dense_subgraph(in_dim, wgt_dim)
 
+def test_bias_add_impl(in_dim, bias_dim):
+    input_dtype = 'int32'
+    output_dtype = 'int8'
+
+    data_shape = tvm.relay.TensorType(in_dim, dtype=input_dtype)
+    bias_shape = tvm.relay.TensorType(bias_dim, dtype=input_dtype)
+
+    inputs = tvm.relay.var('data', data_shape)
+    bias   = tvm.relay.var('bias', bias_shape)
+
+    output = tvm.relay.nn.bias_add(inputs, bias)
+
+    mod = tvm.ir.IRModule.from_expr(output)
+    mod = run_passes(mod)
+    
+    inputs_data = np.random.random_integers(0, 50, in_dim).astype(input_dtype)
+    bias_data   = np.random.random_integers(0, 50, bias_dim).astype(input_dtype)
+    def func_ref(x, y):
+        z = x.copy()
+        for i in range(x.shape[0]):
+            z[i] = x[i] + y
+        return z
+    
+    out_data = run_module(mod, inputs_data, bias_data).astype(np.int8)
+    ref = func_ref(inputs_data, bias_data).astype(np.int8)
+    
+    np.allclose(out_data, ref)
+
+def test_bias_add():
+    for batch in [8, 16, 32, 64]:
+        for n_inp_cols in [16, 32, 64]:
+            data_dim = (batch, n_inp_cols)
+            bias_dim = (n_inp_cols, )
+            print('[Python] Bias Add on {} + {}'.format(data_dim, bias_dim))
+            test_bias_add_impl(data_dim, bias_dim)
 
 if __name__ == '__main__':
+    check_global_func()
     test_dense()
+    test_bias_add()
