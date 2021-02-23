@@ -8,7 +8,7 @@ from tvm import rpc
 # from tvm.contrib import util
 from tvm.relay.op.contrib import ilaflex
 
-from utils import tool
+#from utils import tool
 
 # define the graph
 dtype="float32"

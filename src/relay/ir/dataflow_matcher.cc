@@ -147,9 +147,13 @@ bool DFPatternMatcher::VisitDFPattern_(const AttrPatternNode* attr_pattern, cons
     for (auto kv : attributes) {
       auto attr_name = kv.first;
       auto attr_value = kv.second;
-      auto op_map = Op::GetAttrMap<TVMRetValue>(attr_name);
-      if (op_map.count(op)) {
-        matches = MatchRetValue(attr_value, op_map[op]);
+      if (!Op::HasAttrMap(attr_name)) {
+        matches = false;
+      } else {
+        auto op_map = Op::GetAttrMap<TVMRetValue>(attr_name);
+        if (op_map.count(op)) {
+          matches = MatchRetValue(attr_value, op_map[op]);
+        }
       }
     }
   } else if (auto* op = expr.as<CallNode>()) {
@@ -158,7 +162,11 @@ bool DFPatternMatcher::VisitDFPattern_(const AttrPatternNode* attr_pattern, cons
     // and replace the whole thing with a Visitor-based approach
     ReflectionVTable* reflection = ReflectionVTable::Global();
     auto attrs_node = const_cast<BaseAttrsNode*>(op->attrs.get());
-    auto attr_names = reflection->ListAttrNames(attrs_node);
+    // attrs may be undefined on non-op calls so we check first
+    std::vector<std::string> attr_names;
+    if (attrs_node) {
+      attr_names = reflection->ListAttrNames(attrs_node);
+    }
     for (auto kv : attributes) {
       std::string attr = kv.first;
       if (matches && std::find(attr_names.begin(), attr_names.end(), attr) != attr_names.end()) {
