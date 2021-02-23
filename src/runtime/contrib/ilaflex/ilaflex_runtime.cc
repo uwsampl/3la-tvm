@@ -38,7 +38,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
 
     // TODO: we should probably package up all the files inside TVM
     // to avoid having to refer to other directories
-    std::string driver_dir = "~/3la_ILA_tensor_op/flexnlp";
+    std::string driver_dir = "./3la_driver/flexnlp";
 
     if (outputs_.size() == 1 && input_nodes_.size() == 3 &&
         nodes_[outputs_[0].id_].GetOpName() == "ilaflex.linear") {
@@ -115,6 +115,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
        *  - read back the result and store to o_data_ptr
        */
       // dump data to files
+      std::system("mkdir -p data");
       dump_data(x_data_ptr, x_data_size, "./data/inp.txt");
       dump_data(y_data_ptr, y_data_size, "./data/wgt.txt");
       dump_data(z_data_ptr, z_data_size, "./data/bias.txt");
