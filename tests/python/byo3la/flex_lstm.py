@@ -10,9 +10,9 @@ from tvm.relay.op.contrib import ilaflex
 
 def test_lstm_layer():
     batch_size = 1
-    input_size = 32
-    hidden_size = 32
-    time_steps = 5
+    input_size = 64
+    hidden_size = 64
+    time_steps = 4
 
     input_shape = (batch_size, time_steps, input_size)
     state_shape = (batch_size, hidden_size)
@@ -28,6 +28,11 @@ def test_lstm_layer():
     i2h_weight = relay.const(np.random.rand(*i2h_weight_shape))
     h2h_weight = relay.const(np.random.rand(*h2h_weight_shape))
     bias = relay.const(np.random.rand(*bias_shape))
+
+    # print(input_tensor)
+    # print(i2h_weight)
+    # print(h2h_weight)
+    # print(bias)
 
     mod = tvm.IRModule()
     # we can probably get rid of some of the type annotations
@@ -48,6 +53,9 @@ def test_lstm_layer():
         exe = relay.vm.compile(mod, target)
         vm = runtime.vm.VirtualMachine(exe, ctx)
         ret = vm.invoke("main")
+        out = ret.asnumpy()
+
+    print('lstm result is \n {}'.format(out))
 
     # smoke test: just checking that it runs at all
 

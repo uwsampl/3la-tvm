@@ -156,7 +156,122 @@ class ILAFlexRuntime : public JSONRuntimeBase {
 
     } else if (outputs_.size() == 1
                && nodes_[outputs_[0].id_].GetOpName() == "ilaflex.lstm") {
-      LOG(FATAL) << "LSTM not yet implemented " << symbol_name_;
+      LOG(INFO) << "LSTM input nodes size: " << input_nodes_.size();
+      // TODO: why initial state only has single vector?
+      for (auto it : input_nodes_) {
+        auto data_node_ptr = data_entry_[EntryID(it, 0)];
+        LOG(INFO) << it << '\t' << (data_node_ptr->ndim) << '\t' << data_node_ptr->dtype << '\t' << GetDataSize(*data_node_ptr);
+        for (auto i = 0; i < data_node_ptr->ndim; i++) {
+          std::cout << "dim_" << i << ": " << data_node_ptr->shape[i] << '\t';
+        }
+        std::cout << std::endl;
+      }
+      // check output data dimension
+      auto out_data_ptr = data_entry_[outputs_[0].id_];
+      LOG(INFO) << "LSTM output dimension: " << out_data_ptr->ndim;
+      for (auto i = 0; i < out_data_ptr->ndim; i++) {
+        std::cout << "dim_" << i << ": " << out_data_ptr->shape[i] << '\t';
+      }
+      std::cout << std::endl;
+
+
+      // lstm input
+      auto eid_inp = EntryID(input_nodes_[0], 0);
+      auto& node_data_inp = data_entry_[eid_inp];
+      CHECK(node_data_inp->ndim == 3);
+      auto num_ts = node_data_inp->shape[1];
+      auto num_v_in = (int)(node_data_inp->shape[2])/16;
+      auto num_v_out = num_v_in;
+      // current flexnlp driver enable 4 PEs by default
+      CHECK(num_v_in%4 == 0);
+      auto inp_data_size = GetDataSize(*node_data_inp)/sizeof(float);
+      float* inp_data_ptr = new float[inp_data_size];
+      std::copy(reinterpret_cast<float*>(node_data_inp->data),
+                reinterpret_cast<float*>(node_data_inp->data) + inp_data_size,
+                inp_data_ptr);
+      
+      // lstm initial state
+      // TODO: support non-zero lstm initial state in the future
+
+      // lstm i2h_wgt
+      auto eid_i2h_wgt = EntryID(input_nodes_[2], 0);
+      auto& node_data_i2h_wgt = data_entry_[eid_i2h_wgt];
+      CHECK(node_data_i2h_wgt->ndim == 2);
+      auto i2h_wgt_data_size = GetDataSize(*node_data_i2h_wgt)/sizeof(float);
+      CHECK(i2h_wgt_data_size == 16*num_v_in * 4 * 16*num_v_out);
+      float* i2h_wgt_data_ptr = new float[i2h_wgt_data_size];
+      std::copy(reinterpret_cast<float*>(node_data_i2h_wgt->data),
+                reinterpret_cast<float*>(node_data_i2h_wgt->data) + i2h_wgt_data_size,
+                i2h_wgt_data_ptr);
+      
+      // lstm h2h_wgt
+      auto eid_h2h_wgt = EntryID(input_nodes_[3], 0);
+      auto& node_data_h2h_wgt = data_entry_[eid_h2h_wgt];
+      CHECK(node_data_h2h_wgt->ndim == 2);
+      auto h2h_wgt_data_size = GetDataSize(*node_data_h2h_wgt)/sizeof(float);
+      CHECK(h2h_wgt_data_size == 16*num_v_in * 4 * 16*num_v_out);
+      float* h2h_wgt_data_ptr = new float[h2h_wgt_data_size];
+      std::copy(reinterpret_cast<float*>(node_data_h2h_wgt->data),
+                reinterpret_cast<float*>(node_data_h2h_wgt->data) + h2h_wgt_data_size,
+                h2h_wgt_data_ptr);
+      
+      // lstm bias
+      auto eid_bias = EntryID(input_nodes_[4], 0);
+      auto& node_data_bias = data_entry_[eid_bias];
+      CHECK(node_data_bias->ndim == 1);
+      auto bias_data_size = GetDataSize(*node_data_bias)/sizeof(float);
+      CHECK(bias_data_size == 4 * 16*num_v_in);
+      float* bias_data_ptr = new float[bias_data_size];
+      std::copy(reinterpret_cast<float*>(node_data_bias->data),
+                reinterpret_cast<float*>(node_data_bias->data) + bias_data_size,
+                bias_data_ptr);
+
+      // output
+      // LSTM output is flatten
+      auto eid_o = outputs_[0].id_;
+      auto node_data_o = data_entry_[eid_o];
+      CHECK(node_data_o->ndim == 1);
+      auto o_data_size = GetDataSize(*node_data_o)/sizeof(float);
+      CHECK(o_data_size == 16*num_v_out*num_ts);
+      float* o_data_ptr = new float[o_data_size];
+
+      /* TODO
+       *  - FlexNLP ILA simulator is available in $PATH as "flexnlp_ila_sim"
+       *  - generate tensor-level assembly
+       *  - generate data library
+       *  - translate to ILA instruction program fragment
+       *  - invoke the ILA simulator
+       *  - read back the result and store to o_data_ptr
+       */
+      // dump data to files
+      std::system("mkdir -p data");
+      dump_data(inp_data_ptr, inp_data_size, "./data/lstm_inp.txt");
+      dump_data(i2h_wgt_data_ptr, i2h_wgt_data_size, "./data/lstm_i2h_wgt.txt");
+      dump_data(h2h_wgt_data_ptr, h2h_wgt_data_size, "./data/lstm_h2h_wgt.txt");
+      dump_data(bias_data_ptr, bias_data_size, "./data/lstm_bias.txt");
+
+      // set flexnlp tensor assembly parameters;
+      int is_bias = 1;
+      int is_zero_first = 1;
+
+      // call ILAng-generated simulator
+      std::stringstream call_builder;
+      call_builder << "python3 " << driver_dir << "/lstm_driver.py "
+                   << num_v_in << " " << num_v_out << " "
+                   << num_ts << " " << is_bias << " " << is_zero_first;
+      std::string call_cmd = call_builder.str();
+
+      // std::string command = "echo \"call assembly helper\"";
+      std::system("echo \"calling flexnlp linear layer driver\"");
+      auto res = std::system(call_cmd.c_str());
+      CHECK(res == 0) << "Error executing simulator " << call_cmd;
+
+      // retrieve the results
+      retrieve_result(o_data_ptr, o_data_size, "./data/lstm_out.txt");
+      // copy the result and resume
+      std::copy(o_data_ptr, o_data_ptr + o_data_size,
+                reinterpret_cast<float*>(node_data_o->data));
+      // LOG(FATAL) << "LSTM not yet implemented " << symbol_name_;
     } else {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
