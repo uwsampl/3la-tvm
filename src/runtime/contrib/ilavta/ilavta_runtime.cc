@@ -645,16 +645,14 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
       VTAUop *uop_buf = getReluUops(batch, in_feat);
 
+      int8_t* inputs = reinterpret_cast<int8_t*>(input_data->data);
       for (int i = 0; i < batch; ++i) {
         for (int j = 0; j < in_channels; ++j) {
           if (i >= n_inp_rows || j >= n_inp_cols) {
             // zero padding
             input_buf[i * in_channels + j] = 0;
           } else {
-            input_buf[i * in_channels + j] = rand() % 64;
-            if (rand() % 2) {
-              input_buf[i * in_channels + j] *= -1;
-            }
+            input_buf[i * in_channels + j] = inputs[i * n_inp_cols + j];
           }
         }
       }
