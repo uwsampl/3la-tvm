@@ -46,7 +46,9 @@ from .init import create_workload
 from .nat import count, make_nat_value, make_nat_expr
 from .py_converter import to_python, run_as_python
 from ..transform import gradient
-
+from .exact_matcher import annotate_exact_matches
+# this is just for testing
+from .exact_matcher import deduplicate_vars
 
 def run_opt_pass(expr, opt_pass, import_prelude=False):
     assert isinstance(opt_pass, tvm.transform.Pass)
