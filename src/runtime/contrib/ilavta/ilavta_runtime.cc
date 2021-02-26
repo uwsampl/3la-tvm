@@ -66,6 +66,20 @@ VTAUop * getBiasAddUops(int batch, int in_feat) {
   return uop_buf;
 }
 
+VTAUop * getReluUops(int batch, int in_feat) {
+  int uop_size = batch * in_feat;
+  VTAUop *uop_buf = static_cast<VTAUop *>(VTAMemAlloc(sizeof(VTAUop) * uop_size, 0));
+
+  int uop_idx = 0;
+  for (int i = 0; i < batch; i++) {
+    for (int j = 0; j < in_feat; j++) {
+      uop_buf[uop_idx].dst_idx = i * in_feat + j;
+      uop_idx++;
+    }
+  }
+  return uop_buf;
+}
+
 /*
 * Code adopted from https://github.com/apache/tvm-vta/blob/main/tests/hardware/common/test_lib.cc
 * */
@@ -231,8 +245,6 @@ std::string runILASimulator(const std::string exp_name) {
   return "./result/" + output_filename;
 }
 
-
-
 void readILAOutput(const std::string filename, ila_output_data &out_values) {
   LOG(INFO) << "[Runtime] Reading results from ILA Simulator";
 
@@ -268,6 +280,22 @@ size_t loadILAOutput(const ila_output_data &out_values, int8_t* buffer, size_t o
     }
   }
   return buf_cur;
+}
+
+void copyBackData(std::string pattern_name, size_t output_size, int n_output_rows, int n_output_cols, void *output_data) {
+  std::string output_file = runILASimulator(pattern_name);
+
+  ila_output_data out_data;
+  readILAOutput(output_file, out_data);
+
+  int8_t* buffer = new int8_t[output_size];
+
+  auto buf_read = loadILAOutput(out_data, buffer, n_output_rows, n_output_cols);
+  CHECK(buf_read == output_size) << "Output size mismatch: " << buf_read << " v.s. " << output_size;
+  int8_t* o_data = reinterpret_cast<int8_t*>(output_data);
+  for (size_t i = 0; i < buf_read; ++i) {
+    o_data[i] = buffer[i];
+  }
 }
 
 class ILAVTARuntime : public JSONRuntimeBase {
@@ -590,24 +618,77 @@ class ILAVTARuntime : public JSONRuntimeBase {
       VTAMemFree(out_buf);
       VTADeviceFree(device);
 
-      std::string output_file = runILASimulator("ilavta_bias_add");
-
-      ila_output_data out_data;
-      readILAOutput(output_file, out_data);
-
-      int8_t* buffer = new int8_t[output_buffer_size];
-
-      auto buf_read = loadILAOutput(out_data, buffer, n_inp_rows, n_inp_cols);
-      // We are reading int8 but the buffer is calculated using int32
-      CHECK(buf_read == output_buffer_size) << "Output size mismatch: " << buf_read << " v.s. " << output_buffer_size;
-      // memcpy(reinterpret_cast<int8_t*>(output_data->data), buffer, sizeof(int8_t) * buf_read);
-      int8_t* o_data = reinterpret_cast<int8_t*>(output_data->data);
-      for (size_t i = 0; i < buf_read; ++i) {
-        o_data[i] = buffer[i];
-      }
+      copyBackData("ilavta_bias_add", output_buffer_size, n_inp_rows, n_inp_cols, output_data->data);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.relu") {
       auto input_eid = EntryID(input_nodes_[0], 0);
-      auto output_edi = outputs_[0].id_;
+      auto output_eid = outputs_[0].id_;
+
+      auto input_data = data_entry_[input_eid];
+      auto output_data = data_entry_[output_eid];
+
+      auto n_inp_rows = input_data->shape[0];
+      auto n_inp_cols = input_data->shape[1];
+      auto output_buffer_size = GetDataSize(*output_data);
+
+      int batch = n_inp_rows * VTA_BATCH;
+      int in_feat = n_inp_cols % VTA_BLOCK_OUT == 0 ? n_inp_cols / VTA_BLOCK_OUT : n_inp_cols / VTA_BLOCK_IN + 1;
+      int in_channels = in_feat * VTA_BLOCK_OUT;
+
+      int uop_size = batch / VTA_BATCH * in_feat;
+      int input_size = batch / VTA_BATCH * in_feat;
+      int sim_output_size = input_size;
+
+      int num_instrs = 64;
+      VTADeviceHandle device = VTADeviceAlloc();
+      VTAGenericInsn *instrs = static_cast<VTAGenericInsn *>(VTAMemAlloc(sizeof(VTAGenericInsn) * num_instrs, 0));
+      int32_t* input_buf = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * batch * in_channels, 0));
+
+      VTAUop *uop_buf = getReluUops(batch, in_feat);
+
+      for (int i = 0; i < batch; ++i) {
+        for (int j = 0; j < in_channels; ++j) {
+          if (i >= n_inp_rows || j >= n_inp_cols) {
+            // zero padding
+            input_buf[i * in_channels + j] = 0;
+          } else {
+            input_buf[i * in_channels + j] = rand() % 64;
+            if (rand() % 2) {
+              input_buf[i * in_channels + j] *= -1;
+            }
+          }
+        }
+      }
+
+      int ptr = 0;
+      instrs[ptr++] = get1DLoadStoreInsn(
+        VTA_OPCODE_LOAD,
+        VTA_MEM_ID_UOP,
+        0, VTAMemGetPhyAddr(uop_buf) / VTA_UOP_ELEM_BYTES, uop_size, 0, 0, 0, 0);
+
+      instrs[ptr++] = get1DLoadStoreInsn(
+        VTA_OPCODE_LOAD,
+        VTA_MEM_ID_ACC,
+        0, VTAMemGetPhyAddr(input_buf) / VTA_ACC_ELEM_BYTES, input_size, 0, 0, 0, 0
+      );
+
+      instrs[ptr++] = getAluInsn(VTA_ALU_OPCODE_MAX, 0, uop_size, true, 0, 0, 0, 0, 1);
+      
+      instrs[ptr++] = get1DLoadStoreInsn(
+        VTA_OPCODE_STORE,
+        VTA_MEM_ID_OUT,
+        0, VTAMemGetPhyAddr(input_buf) / VTA_OUT_ELEM_BYTES, sim_output_size, 1, 0, 1, 0
+      );
+
+      instrs[ptr++] = getFinishInsn(0, 1);
+
+      VTADeviceRun(device, VTAMemGetPhyAddr(instrs), ptr, 1000);
+
+      VTAMemFree(input_buf);
+      VTAMemFree(uop_buf);
+      VTAMemFree(instrs);
+      VTADeviceFree(device);
+
+      copyBackData("ilavta_relu", output_buffer_size, n_inp_rows, n_inp_cols, output_data->data);
     }
   }
 
