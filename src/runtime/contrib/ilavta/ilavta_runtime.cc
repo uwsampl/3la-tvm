@@ -297,7 +297,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
     dump_toggle_fn->CallPacked(arg, &rv);
 
     auto op_name = nodes_[outputs_[0].id_].GetOpName();
-    if (op_name != "ilavta.dense" && op_name != "ilavta.bias_add") {
+    if (op_name != "ilavta.dense" && op_name != "ilavta.bias_add" && op_name != "ilavta.relu") {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
 
@@ -605,6 +605,9 @@ class ILAVTARuntime : public JSONRuntimeBase {
       for (size_t i = 0; i < buf_read; ++i) {
         o_data[i] = buffer[i];
       }
+    } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.relu") {
+      auto input_eid = EntryID(input_nodes_[0], 0);
+      auto output_edi = outputs_[0].id_;
     }
   }
 

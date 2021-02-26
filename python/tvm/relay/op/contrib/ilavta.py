@@ -26,6 +26,7 @@ def _register_external_op_helper(op_name, supported=True):
 # _register_external_op_helper("nn.batch_matmul")
 _register_external_op_helper("nn.bias_add")
 _register_external_op_helper("nn.dense")
+_register_external_op_helper("nn.relu")
 
 
 def make_pattern_conv2d():
@@ -50,11 +51,16 @@ def make_pattern_bias_add():
     bias = wildcard()
     return is_op('nn.bias_add')(data, bias)
 
+def make_pattern_relu():
+    data = wildcard()
+    return is_op('nn.relu')(data)
+
 @register_pattern_table("ilavta")
 def pattern_table():
     conv2d_pat = ("ilavta.conv2d", make_pattern_conv2d())
     matmul_pat = ("ilavta.batch_matmul", make_pattern_batch_matmul())
     dense_pat  = ("ilavta.dense", make_pattern_dense())  
     bias_add_pat = ("ilavta.bias_add", make_pattern_bias_add())
-    ilavta_patterns = [conv2d_pat, matmul_pat, dense_pat, bias_add_pat]
+    relu_pat = ("ilavta.relu", make_pattern_relu())
+    ilavta_patterns = [conv2d_pat, matmul_pat, dense_pat, bias_add_pat, relu_pat]
     return ilavta_patterns
