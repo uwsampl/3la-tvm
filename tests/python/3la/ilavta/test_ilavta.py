@@ -176,7 +176,31 @@ def test_bias_add():
             print('[Python] Bias Add on {} + {}'.format(data_dim, bias_dim))
             test_bias_add_impl(data_dim, bias_dim)
 
+def test_relu_impl(input_dim):
+    dtype = 'int8'
+    inputs = tvm.relay.var('input', shape=input_dim, dtype=dtype)
+    output = tvm.relay.nn.relu(inputs)
+    mod = tvm.ir.IRModule.from_expr(output)
+    mod = run_passes(mod)
+    input_data = np.random.random_integers(-64, 64, input_dim).astype(np.int8)
+
+    def func_ref(data):
+        ref = data.copy()
+        ref[ref < 0] = 0
+        return ref
+
+    output = run_module(mod, input_data).astype(np.int8)
+    ref = func_ref(input_data).astype(np.int8)
+    assert np.allclose(output, ref)
+
+def test_relu():
+    for batch in [8, 16, 32, 64]:
+        for n_inp_cols in [16, 32, 64]:
+            print('[Python] Testing on Relu({}x{})'.format(batch, n_inp_cols))
+            test_relu_impl((batch, n_inp_cols))
+
 if __name__ == '__main__':
     check_global_func()
     test_dense()
     test_bias_add()
+    test_relu()
