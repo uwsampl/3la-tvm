@@ -22,11 +22,22 @@ using ila_output_data = std::vector<std::unordered_map<std::string, std::string>
 
 /*
 * Code adopted from https://github.com/apache/tvm-vta/blob/main/tests/hardware/common/test_lib.cc
+* Given `batch`, `in_feat` (number of rows [16 bytes] used to store a row in the input matrix)
+* and `out_feat` (number of `in_feat`s), return UOps that perform a dense operator over
+* INPUT buffer and ACC buffer
 * */
 VTAUop * getGEMMUops(int batch, int in_feat, int out_feat); 
 
+/*
+ * Given `batch` and `in_feat`, return UOps that perform ADD operator
+ * over each row in the ACC buffer
+ * */
 VTAUop * getBiasAddUops(int batch, int in_feat);
 
+/*
+ * Given `batch` and `in_feat`, return UOps that perform max(x, 0) on each row
+ * in the ACC buffer.
+ * */
 VTAUop * getReluUops(int batch, int in_feat); 
  
 /*
