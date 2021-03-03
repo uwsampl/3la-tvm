@@ -201,6 +201,17 @@ def test_bias_add():
             np.testing.assert_allclose(op_res.asnumpy(), ref_res, rtol=rtol)
 
 
+def test_bias_add_type_failure():
+    # the axis is out of range
+    try:
+        b_add = relay.nn.bias_add(relay.const(1), relay.const(2), axis=0)
+        run_infer_type(b_add)
+    except tvm._ffi.base.TVMError:
+        pass
+    else:
+        assert False
+
+
 def test_expand_dims_infer_type():
     for dtype in ["float16", "float32"]:
         n, t, d = te.size_var("n"), te.size_var("t"), 100
@@ -321,6 +332,16 @@ def test_dropout():
         assert "rate=" in y.astext()
         yy = run_infer_type(y)
         assert yy.checked_type == input_ty
+
+    in_np = np.random.random([4, 5, 6]).astype("float32")
+    x = relay.const(in_np)
+    y = relay.nn.dropout(x, rate=0.5)
+    func = relay.Function([], y)
+    for target, ctx in tvm.testing.enabled_targets():
+        for backend in ["debug", "graph"]:
+            intrp = relay.create_executor("debug", ctx=ctx, target=target)
+            op_res = intrp.evaluate(func)()
+            tvm.testing.assert_allclose(op_res.asnumpy(), in_np, rtol=0.01)
 
 
 def test_batch_norm():
@@ -474,6 +495,7 @@ def test_bitserial_dense():
 if __name__ == "__main__":
     test_concatenate()
     test_bias_add()
+    test_bias_add_type_failure()
     test_unary_op()
     test_binary_op()
     test_expand_dims_infer_type()

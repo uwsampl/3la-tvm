@@ -37,20 +37,21 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
       name = op_node->name;
     } else if (const auto* fn = cn->op.as<FunctionNode>()) {
       auto comp = fn->GetAttr<String>(attr::kComposite);
-      CHECK(comp.defined())
-          << "JSON runtime only supports composite functions.";
+      CHECK(comp.defined()) << "JSON runtime only supports composite functions.";
       name = comp.value();
-
-      if (name == "ilavta.conv2d") {
-        //
-      } else if (name == "ilavta.batch_matmul") {
-        //
-      } else {
+      if (!(name == "ilavta.conv2d" || name == "ilavta.bias_add" || name == "ilavta.dense" ||
+            name == "ilavta.relu")) {
         LOG(FATAL) << "Unrecognized pattern: " << name;
       }
+      if (name == "ilavta.dense") {
+        LOG(INFO) << "ilavta.dense pattern";
+      } else if (name == "ilavta.bias_add") {
+        LOG(INFO) << "ilavta.bias_add pattern";
+      } else if (name == "ilavta.relu") {
+        LOG(INFO) << "ilavta.relu pattern";
+      }
     } else {
-      LOG(FATAL) << "ILAVTA runtime does not support calls to "
-                 << cn->op->GetTypeKey();
+      LOG(FATAL) << "ILAVTA runtime does not support calls to " << cn->op->GetTypeKey();
     }
     LOG(INFO) << "[Pattern Matching] Find annotated: " << name;
 
@@ -62,7 +63,6 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
     auto node = std::make_shared<JSONGraphNode>(name,     /* name_ */
                                                 "kernel", /* op_type_ */
                                                 inputs, 1 /* num_outputs_ */);
-    // SetCallNodeAttribute(node, call);
     return AddNode(node, GetRef<Expr>(cn));
   }
 
@@ -81,6 +81,7 @@ runtime::Module ILAVTACompiler(const ObjectRef& ref) {
   const auto* pf = runtime::Registry::Get("runtime.ILAVTARuntimeCreate");
   CHECK(pf != nullptr) << "Cannot find ILAVTA runtime module to create";
   auto mod = (*pf)(func_name, graph_json, params);
+  LOG(INFO) << "Module created";
   return mod;
 }
 
