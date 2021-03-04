@@ -32,11 +32,11 @@ def deduplicate_vars(expr):
             if isinstance(pattern, relay.PatternVar):
                 return relay.PatternVar(self.visit(pattern.var))
             if isinstance(pattern, relay.PatternTuple):
-                return relay.PatternTuple([self.visit(subpattern)
+                return relay.PatternTuple([self.visit_pattern(subpattern)
                                            for subpattern in pattern.patterns])
             if isinstance(pattern, relay.PatternConstructor):
                 return relay.PatternConstructor(pattern.constructor,
-                                                [self.visit(subpattern)
+                                                [self.visit_pattern(subpattern)
                                                  for subpattern in pattern.patterns])
             raise ValueError(f"Invalid pattern {pattern}")
 
@@ -61,40 +61,73 @@ def check_match(template, target):
     class Matcher(ExprFunctor):
         def __init__(self, match_template):
             super().__init__()
+            # template: What we are matching against at any given point
+            # (note: since we cannot add extra args to overloaded functions,
+            #  we have to mutate this field when we go down subtrees
+            #  and set it back once we return)
             self.template = match_template
+            # template vars: Holes we will fill with matching subexpressions.
+            # The matcher will check that the matches are consistent
+            # (that the same hole matches the same expression everywhere
+            #  -- must be an exact syntactic match)
             self.template_vars = set(free_vars(match_template))
+            # map of template vars to matched expressions
             self.matched_exprs = {}
-            # for *bound* vars, we need to be sure they correspond
+            # map of *bound* variables in the template to *bound* variables
+            # in the input; this mapping must correspond to have a match
             self.var_mapping = {}
 
-        def check_assigned_matches(self, expr):
+        def at_template_var(self):
+            """
+            Returns True iff we are at a template var
+            """
             if not isinstance(self.template, relay.Var):
                 return False
-            if self.template not in self.template_vars:
-                return False
+            return self.template in self.template_vars
+
+        def check_assigned_matches(self, expr):
+            """
+            Checks if we are comparing the expression to a template variable
+            and updates the match dictionary if we are.
+
+            Returns False if we are not comparing to a template var
+            or if the template does not match
+            """
+            assert self.at_template_var()
             if self.template not in self.matched_exprs:
                 self.matched_exprs[self.template] = expr
                 return True
             # if it's something we've already matched, has to be an exact match
             return tvm.ir.structural_equal(self.matched_exprs[self.template], expr)
 
+        def check_direct_match(self, expr):
+            # wrapper over direct visitor that first
+            # checks if we have a template var match
+            # and also checks if the types match
+            if self.at_template_var():
+                return self.check_assigned_matches(expr)
+            # if they're not the same type, they can't possibly match
+            if not isinstance(self.template, type(expr)):
+                return False
+            return self.visit(expr)
+
         def check_nested_match(self, template_subexpr, expr):
+            """
+            Recurses by reassigning the template variable to the subexpression
+            and assigning back after we're done (ugly, yes)
+            """
             old_template = self.template
             self.template = template_subexpr
-            ret = self.visit(expr)
+            ret = self.check_direct_match(expr)
             self.template = old_template
             return ret
 
         def visit_var(self, var):
-            if self.check_assigned_matches(var):
-                return True
             if var not in self.var_mapping:
                 return False
             return self.template == self.var_mapping[var]
 
         def trivial_equality(self, other):
-            if self.check_assigned_matches(other):
-                return True
             return self.template == other
 
         def visit_constant(self, const):
@@ -110,9 +143,8 @@ def check_match(template, target):
             return self.trivial_equality(op)
 
         def visit_let(self, let):
-            if self.check_assigned_matches(let):
-                return True
-            if not isinstance(self.template, relay.Let):
+            if (let.var in self.var_mapping
+                and self.var_mapping[let.var] != self.template.var):
                 return False
             self.var_mapping[let.var] = self.template.var
             value_match = self.check_nested_match(self.template.value, let.value)
@@ -121,10 +153,6 @@ def check_match(template, target):
             return self.check_nested_match(self.template.body, let.body)
 
         def visit_function(self, func):
-            if self.check_assigned_matches(func):
-                return True
-            if not isinstance(self.template, relay.Function):
-                return False
             if len(func.params) != len(self.template.params):
                 return False
             for i in range(len(func.params)):
@@ -132,10 +160,6 @@ def check_match(template, target):
             return self.check_nested_match(self.template.body, func.body)
 
         def visit_call(self, call):
-            if self.check_assigned_matches(call):
-                return True
-            if not isinstance(self.template, relay.Call):
-                return False
             if len(self.template.args) != len(call.args):
                 return False
             if not self.check_nested_match(self.template.op, call.op):
@@ -146,22 +170,14 @@ def check_match(template, target):
             return True
 
         def visit_tuple(self, tup):
-            if self.check_assigned_matches(tup):
-                return True
-            if not isinstance(self.template, relay.Tuple):
-                return False
             if len(self.template.fields) != len(tup.fields):
                 return False
             for i in range(len(tup.fields)):
-                if not self.check_nested_match(self.template.fields[i], call.fields[i]):
+                if not self.check_nested_match(self.template.fields[i], tup.fields[i]):
                     return False
             return True
 
         def visit_if(self, if_expr):
-            if self.check_assigned_matches(if_expr):
-                return True
-            if not isinstance(self.template, relay.If):
-                return False
             if not self.check_nested_match(self.template.cond, if_expr.cond):
                 return False
             if not self.check_nested_match(self.template.true_branch, if_expr.true_branch):
@@ -169,21 +185,21 @@ def check_match(template, target):
             return self.check_nested_match(self.template.false_branch, if_expr.false_branch)
 
         def visit_tuple_getitem(self, tgi):
-            if self.check_assigned_matches(tgi):
-                return True
-            if not isinstance(self.template, relay.TupleGetItem):
-                return False
             if self.template.index != tgi.index:
                 return False
             return self.check_nested_match(self.template.tuple_value, tgi.tuple_value)
 
         def check_nested_pattern(self, template_pattern, pattern):
             if isinstance(pattern, relay.PatternWildcard):
-                return template_pattern == pattern
+                return isinstance(template_pattern, relay.PatternWildcard)
             if isinstance(pattern, relay.PatternVar):
                 if not isinstance(template_pattern, relay.PatternVar):
                     return False
-                return self.check_nested_match(template_pattern.var, pattern.var)
+                if (pattern.var in self.var_mapping
+                    and self.var_mapping[pattern.var] != template_pattern.var):
+                    return False
+                self.var_mapping[pattern.var] = template_pattern.var
+                return True
             if isinstance(pattern, relay.PatternTuple):
                 if not isinstance(template_pattern, relay.PatternTuple):
                     return False
@@ -209,10 +225,6 @@ def check_match(template, target):
             raise ValueError(f"Invalid pattern: {pattern}")
 
         def visit_match(self, match):
-            if self.check_assigned_matches(match):
-                return True
-            if not isinstance(self.template, relay.Match):
-                return False
             if not self.check_nested_match(self.template.data, match.data):
                 return False
             if len(self.template.clauses) != len(match.clauses):
@@ -222,14 +234,14 @@ def check_match(template, target):
                 clause = match.clauses[i]
                 if not self.check_nested_pattern(template_clause.lhs, clause.lhs):
                     return False
-                if not self.check_nested_match(template.clause.rhs, clause.rhs):
+                if not self.check_nested_match(template_clause.rhs, clause.rhs):
                     return False
             return True
 
         # punting on refs for now
 
     matcher = Matcher(template)
-    res = matcher.visit(target)
+    res = matcher.check_direct_match(target)
     if not res:
         return False, None
 
@@ -245,6 +257,7 @@ def check_match(template, target):
 
     return res, mapping
 
+
 class MatchMutator(ExprMutator):
     def __init__(self, target, compiler_name, composite_name, composite_counter=0):
         """
@@ -258,13 +271,35 @@ class MatchMutator(ExprMutator):
         """
         super().__init__()
         self.target = target
+        # we will use the order of the Relay free_vars pass
+        # to determine the order in which pattern calls are made
         self.target_vars = free_vars(target)
         self.compiler_name = compiler_name
         self.composite_name = composite_name
         self.composite_counter = composite_counter
 
     def extract_target(self, match_args):
-        match_ordering = [match_args[v] if v in match_args else relay.Tuple([]) for v in self.target_vars]
+        """
+        If we found a match for our target, this will
+        produce a call to a BYOC-annotated version of the target
+        with the pattern-arguments as args to the call
+
+        Format:
+        (fn(a1, ..., an, attrs={Compiler: compiler_name}) {
+             (fn(b1, ..., bn, attrs={
+                                     Composite: composite_name
+                                     global_name: composite_name+counter
+        }) {
+                 target expression
+                 # note: b1 ... bn are the free vars from the target
+        })(a1, ..., an)
+        })(match_args[0], ..., match_args[n-1])
+        """
+        assert all(map(lambda v: v in match_args, self.target_vars))
+        match_ordering = [match_args[v] for v in self.target_vars]
+
+        # we have to deduplicate vars for Relay's well-formedness check
+        # (all var definitions must be unique)
         inner_body = deduplicate_vars(self.target)
         inner_args = free_vars(inner_body)
         inner_func = relay.Function(inner_args, inner_body)
@@ -279,95 +314,23 @@ class MatchMutator(ExprMutator):
         self.composite_counter += 1
         return outer_func(*match_ordering)
 
-    # could probably do this via reflection, but let's not...
-    def visit_var(self, var):
-        found_match, match_args = check_match(self.target, var)
-        if found_match:
-            return self.extract_target(match_args)
-        return var
-
-    def visit_constant(self, constant):
-        found_match, match_args = check_match(self.target, constant)
-        if found_match:
-            return self.extract_target(match_args)
-        return constant
-
-    def visit_call(self, call):
-        found_match, match_args = check_match(self.target, call)
-        if found_match:
-            return self.extract_target(match_args)
-        return relay.Call(self.visit(call.op),
-                          [self.visit(arg) for arg in call.args],
-                          call.attrs)
-
-    def visit_tuple(self, tup):
-        found_match, match_args = check_match(self.target, tup)
-        if found_match:
-            return self.extract_target(match_args)
-        return relay.Tuple([self.visit(field) for field in tup.fields])
-
-    def visit_function(self, func):
+    def visit(self, expr):
+        """
+        Whenever we encounter an expression,
+        check if we find a match and insert it if we do;
+        otherwise visit as before
+        """
         # headache-saver: if it's a codegen function, we will ignore it
-        if func.attrs is not None and ("Compiler" in func.attrs or "Composite" in func.attrs):
-            return func
-        found_match, match_args = check_match(self.target, func)
+        if isinstance(expr, relay.Function):
+            if expr.attrs is not None and ("Compiler" in expr.attrs or "Composite" in expr.attrs):
+                return expr
+
+        found_match, match_args = check_match(self.target, expr)
         if found_match:
             return self.extract_target(match_args)
-        return relay.Function(func.params,
-                              self.visit(func.body),
-                              func.ret_type,
-                              func.type_params,
-                              func.attrs)
+        return super().visit(expr)
 
-    def visit_if(self, if_expr):
-        found_match, match_args = check_match(self.target, if_expr)
-        if found_match:
-            return self.extract_target(match_args)
-        return relay.If(self.visit(if_expr.cond),
-                        self.visit(if_expr.true_branch),
-                        self.visit(if_expr.false_branch))
-
-    def visit_tuple_getitem(self, tgi):
-        found_match, match_args = check_match(self.target, tgi)
-        if found_match:
-            return self.extract_target(match_args)
-        return relay.TupleGetItem(self.visit(tgi.tuple_value), tgi.index)
-
-    def visit_op(self, op):
-        found_match, match_args = check_match(self.target, op)
-        if found_match:
-            return self.extract_target(match_args)
-        return op
-
-    def visit_global_var(self, gv):
-        found_match, match_args = check_match(self.target, gv)
-        if found_match:
-            return self.extract_target(match_args)
-        return gv
-
-    def visit_constructor(self, ctor):
-        found_match, match_args = check_match(self.target, ctor)
-        if found_match:
-            return self.extract_target(match_args)
-        return ctor
-
-    def visit_let(self, let):
-        found_match, match_args = check_match(self.target, let)
-        if found_match:
-            return self.extract_target(match_args)
-        return relay.Let(let.var, self.visit(let.value), self.visit(let.body))
-
-    def visit_match(self, match):
-        found_match, match_args = check_match(self.target, match)
-        if found_match:
-            return self.extract_target(match_args)
-        return Match(
-            self.visit(match.data),
-            [Clause(c.lhs, self.visit(c.rhs)) for c in match.clauses],
-            complete=match.complete,
-        )
-
-    # again, punting on refs
+    # warning: will not work on refs because the matcher does not handle them
 
 def annotate_exact_matches(expr, target, compiler_name, composite_name):
     """
