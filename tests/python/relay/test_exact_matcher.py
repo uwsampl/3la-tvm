@@ -65,6 +65,37 @@ def assert_simple_cases(pattern, compiler_name, pattern_name):
     assert call_match.args[2] == b
     assert check_compiler_call(call_match.args[1], pattern)
 
+    x, y = relay.Var("x"), relay.Var("y")
+    tup = relay.Tuple([x, fresh_pattern, y])
+    tup_match = annotate_exact_matches(tup, pattern, compiler_name, pattern_name)
+    assert isinstance(tup_match, relay.Tuple)
+    assert isinstance(tup_match.fields[0], relay.Var)
+    assert isinstance(tup_match.fields[2], relay.Var)
+    assert check_compiler_call(tup_match.fields[1], pattern)
+
+    x, y, z, w = relay.Var("x"), relay.Var("y"), relay.Var("z"), relay.Var("w")
+    match_clause = relay.Match(x, [
+        relay.Clause(relay.PatternWildcard(), fresh_pattern),
+        relay.Clause(relay.PatternVar(y), y),
+        relay.Clause(relay.PatternTuple([
+            relay.PatternVar(z), relay.PatternVar(w)
+        ]), fresh_pattern)
+    ])
+    match_clause_match = annotate_exact_matches(match_clause, pattern, compiler_name, pattern_name)
+    assert isinstance(match_clause_match, relay.Match)
+    assert len(match_clause_match.clauses) == 3
+    assert isinstance(match_clause_match.clauses[0].lhs, relay.PatternWildcard)
+    assert check_compiler_call(match_clause_match.clauses[0].rhs, pattern)
+    assert tvm.ir.structural_equal(
+        match_clause.clauses[1],
+        match_clause_match.clauses[1],
+        True)
+    assert tvm.ir.structural_equal(
+        match_clause.clauses[2].lhs,
+        match_clause_match.clauses[2].lhs,
+        True)
+    assert check_compiler_call(match_clause_match.clauses[2].rhs, pattern)
+
 
 def test_match_misses():
     pattern = relay.nn.dense(relay.Var("v"), relay.Var("w"))
@@ -101,6 +132,12 @@ def test_let_match():
     x = relay.Var("x")
     pattern = relay.Let(x, relay.const(2), x*x)
     assert_simple_cases(pattern, "MyCompiler", "Square")
+
+
+def test_tuple_match():
+    x, y, w, z = relay.Var("x"), relay.Var("y"), relay.Var("w"), relay.Var("z")
+    pattern = relay.Tuple([x, y + z, w])
+    assert_simple_cases(pattern, "MyCompiler", "TupleSum")
 
 
 def test_nested_function_match():
@@ -201,14 +238,66 @@ def test_no_improper_capture():
     assert tvm.ir.structural_equal(bad, bad_match, True)
 
 
+def test_match_whole_match_block():
+    # x, z, and w are pattern vars but y is bound
+    x, y, z, w = relay.Var("x"), relay.Var("y"), relay.Var("z"), relay.Var("w")
+    pattern = relay.Match(x, [
+        relay.Clause(
+            relay.PatternTuple([
+                relay.PatternVar(y),
+                relay.PatternWildcard()
+            ]),
+            relay.Tuple([y, z])),
+        relay.Clause(relay.PatternWildcard(), w)
+    ])
+
+    a = relay.Var("a")
+    b = relay.Var("b")
+    instance = relay.Let(
+        b,
+        relay.Match(relay.Tuple([relay.const(1), relay.const(2)]), [
+            relay.Clause(
+                relay.PatternTuple([
+                    relay.PatternVar(a),
+                    relay.PatternWildcard()
+                ]),
+                relay.Tuple([a, relay.Tuple([])])),
+            relay.Clause(relay.PatternWildcard(),
+                         relay.Tuple([relay.const(3), relay.Tuple([])]))
+        ]),
+        relay.TupleGetItem(b, 0))
+
+    match = annotate_exact_matches(instance, pattern, "MyCompiler", "Match")
+    assert isinstance(match, relay.Let)
+    assert check_compiler_call(match.value, pattern)
+    assert isinstance(match.body, relay.TupleGetItem)
+
+    assert_simple_cases(pattern, "MyCompiler", "MatchBlock")
+
+
+def test_inconsistent_match():
+    x, y = relay.Var("x"), relay.Var("y")
+    pattern = relay.Tuple([x, y, x])
+
+    # template var is assigned inconsistently
+    a, b, c = relay.Var("a"), relay.Var("b"), relay.Var("c")
+    bad_match = relay.Tuple([a, b, c])
+    result = annotate_exact_matches(bad_match, pattern, "MyCompiler", "Tuple")
+    assert not check_compiler_call(result, pattern)
+    assert tvm.ir.structural_equal(result, bad_match, True)
+
+
 if __name__ == "__main__":
     test_match_misses()
     test_operator_simple_match()
     test_nested_operator_match()
     test_call_match()
     test_let_match()
+    test_tuple_match()
     test_nested_function_match()
     test_separate_matches()
     test_nested_matches()
     test_internal_matches_blocked()
     test_no_improper_capture()
+    test_match_whole_match_block()
+    test_inconsistent_match()
