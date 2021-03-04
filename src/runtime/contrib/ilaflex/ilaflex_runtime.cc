@@ -38,7 +38,8 @@ class ILAFlexRuntime : public JSONRuntimeBase {
 
     // TODO: we should probably package up all the files inside TVM
     // to avoid having to refer to other directories
-    std::string driver_dir = "./3la_driver/flexnlp";
+    std::string driver_dir = getenv("TVM_HOME");
+     driver_dir += "/python/tvm/contrib/ly3la/flexnlp"; 
 
     if (outputs_.size() == 1 && input_nodes_.size() == 3 &&
         nodes_[outputs_[0].id_].GetOpName() == "ilaflex.linear") {
@@ -133,8 +134,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
                    << num_timestep << " " << is_bias;
       std::string call_cmd = call_builder.str();
 
-      // std::string command = "echo \"call assembly helper\"";
-      std::system("echo \"calling flexnlp linear layer driver\"");
+      LOG(INFO) << "calling flexnlp linear layer driver";
       auto res = std::system(call_cmd.c_str());
       CHECK(res == 0) << "Error executing simulator " << call_cmd;
 
@@ -261,8 +261,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
                    << num_ts << " " << is_bias << " " << is_zero_first;
       std::string call_cmd = call_builder.str();
 
-      // std::string command = "echo \"call assembly helper\"";
-      std::system("echo \"calling flexnlp linear layer driver\"");
+      LOG(INFO) << "calling flexnlp lstm driver";
       auto res = std::system(call_cmd.c_str());
       CHECK(res == 0) << "Error executing simulator " << call_cmd;
 

@@ -1,4 +1,4 @@
-[ubmodule "dmlc-core"]
+[submodule "dmlc-core"]
 	path = 3rdparty/dmlc-core
 	url = https://github.com/dmlc/dmlc-core
 [submodule "dlpack"]
@@ -9,9 +9,6 @@
 	url = https://github.com/agauniyal/rang
 [submodule "python/tvm/contrib/ly3la"]
 	path = python/tvm/contrib/ly3la
-	url = git@github.com:LeeOHzzZ/3la_ILA_tensor_op.git
-[submodule "tests/python/byo3la/3la_driver"]
-	path = tests/python/byo3la/3la_driver
 	url = git@github.com:LeeOHzzZ/3la_ILA_tensor_op.git
 [submodule "3rdparty/vta-hw"]
 	path = 3rdparty/vta-hw
