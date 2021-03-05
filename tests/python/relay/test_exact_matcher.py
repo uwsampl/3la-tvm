@@ -1,30 +1,7 @@
 import tvm
 from tvm import relay
 
-from tvm.relay.testing import annotate_exact_matches, deduplicate_vars
-
-def call_func_with_attr(expr, func_attr):
-    # True iff expr is a call of a function literal
-    # where the function literal has the specified attr
-    if not isinstance(expr, relay.Call):
-        return False
-    if not isinstance(expr.op, relay.Function):
-        return False
-    if expr.op.attrs is None:
-        return False
-    return func_attr in expr.op.attrs
-
-
-def check_compiler_call(expr, expected_body):
-    # check for a compiler function with an inner composite
-    if not call_func_with_attr(expr, "Compiler"):
-        return False
-    inner_call = expr.op.body
-    if not call_func_with_attr(inner_call, "Composite"):
-        return False
-    inner_body = inner_call.op.body
-    return tvm.ir.structural_equal(inner_body, expected_body, True)
-
+from tvm.relay.testing import annotate_exact_matches, deduplicate_vars, check_compiler_call
 
 def assert_simple_cases(pattern, compiler_name, pattern_name):
     fresh_pattern = deduplicate_vars(pattern)
