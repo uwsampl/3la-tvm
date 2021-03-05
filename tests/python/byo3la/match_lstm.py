@@ -121,15 +121,6 @@ def linear_layer_definition(time_steps, hidden_size, dense_dim):
                           ret_type=relay.TensorType((time_steps, dense_dim)))
 
 
-def time_distribute(in_expr, time_steps, construct_body, time_axis=1):
-    splits = relay.split(in_expr, time_steps, time_axis)
-    rebuilt = [
-        construct_body(relay.squeeze(split, axis=[time_axis]))
-        for split in splits
-    ]
-    return relay.stack(rebuilt, axis=time_axis)
-
-
 def test_lstm_function_match():
     """
     Version where we define functions to handle the LSTM and linear layer
@@ -166,9 +157,6 @@ def test_lstm_function_match():
         # squeeze away batch size
         linear_var(relay.squeeze(lstm_res, axis=[0]),
                    linear_weight, linear_bias))
-        # time_distribute(
-        #     lstm_res, time_steps,
-        #     lambda split: linear_var(split, linear_weight, linear_bias)))
     builder.ret(relay.nn.softmax(linear_res))
 
     speech_to_text = builder.get()
