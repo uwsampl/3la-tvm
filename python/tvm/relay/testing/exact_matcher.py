@@ -336,7 +336,9 @@ class MatchMutator(ExprMutator):
 
         found_match, match_args = check_match(self.target, expr)
         if found_match:
-            return self.extract_target(match_args)
+            # need to check for matches in the match args too
+            final_args = {var: self.visit(arg) for var, arg in match_args.items()}
+            return self.extract_target(final_args)
         return super().visit(expr)
 
 
