@@ -286,13 +286,13 @@ class MatchMutator(ExprMutator):
 
         Format:
         (fn(a1, ..., an, attrs={Compiler: compiler_name}) {
-             (fn(b1, ..., bn, attrs={
-                                     Composite: composite_name
-                                     global_name: composite_name+counter
-        }) {
-                 target expression
-                 # note: b1 ... bn are the free vars from the target
-        })(a1, ..., an)
+            (fn(b1, ..., bn, attrs={
+                Composite: composite_name
+                global_name: composite_name+counter
+            }) {
+                target expression
+                # note: b1 ... bn are the free vars from the target
+            })(a1, ..., an)
         })(match_args[0], ..., match_args[n-1])
         """
         assert all(map(lambda v: v in match_args, self.target_vars))
