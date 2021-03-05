@@ -304,6 +304,30 @@ def test_ref_match():
     assert_simple_cases(read_pattern, "MyCompiler", "RefWrite")
 
 
+def test_multiple_matches():
+    # we have multiple instances of a pattern
+    # and the matcher should find all matches
+    def make_linear(d, w, b):
+        return relay.nn.bias_add(relay.nn.dense(d, w), b)
+
+    x, y, z = relay.Var("x"), relay.Var("y"), relay.Var("z")
+    pattern = make_linear(x, y, z)
+
+    expr = make_linear(
+        make_linear(relay.const(1), relay.const(2), relay.const(3)),
+        make_linear(relay.const(4), relay.const(5), relay.const(6)),
+        relay.const(7))
+    lin_match = annotate_exact_matches(expr, pattern, "MyCompiler", "Let")
+    assert isinstance(lin_match, relay.Call)
+    assert len(lin_match.args) == 3
+    assert check_compiler_call(lin_match, pattern)
+
+    # the first two arguments should also be arguments
+    assert check_compiler_call(lin_match.args[0], pattern)
+    assert check_compiler_call(lin_match.args[1], pattern)
+    assert not check_compiler_call(lin_match.args[2], pattern)
+
+
 if __name__ == "__main__":
     test_match_misses()
     test_operator_simple_match()
@@ -319,3 +343,4 @@ if __name__ == "__main__":
     test_match_whole_match_block()
     test_inconsistent_match()
     test_ref_match()
+    test_multiple_matches()
