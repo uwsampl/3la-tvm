@@ -369,3 +369,30 @@ def annotate_exact_matches(expr, target, compiler_name, composite_name):
     """
     mut = MatchMutator(target, compiler_name, composite_name)
     return mut.visit(expr)
+
+
+def call_func_with_attr(expr, func_attr):
+    # True iff expr is a call of a function literal
+    # where the function literal has the specified attr
+    if not isinstance(expr, relay.Call):
+        return False
+    if not isinstance(expr.op, relay.Function):
+        return False
+    if expr.op.attrs is None:
+        return False
+    return func_attr in expr.op.attrs
+
+
+def check_compiler_call(expr, expected_body):
+    """
+    Provided for testing purposes: Checks if the given expression is a
+    matcher-produced compiler function with the given body
+    """
+    # check for a compiler function with an inner composite
+    if not call_func_with_attr(expr, "Compiler"):
+        return False
+    inner_call = expr.op.body
+    if not call_func_with_attr(inner_call, "Composite"):
+        return False
+    inner_body = inner_call.op.body
+    return tvm.ir.structural_equal(inner_body, expected_body, True)
