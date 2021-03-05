@@ -10,6 +10,7 @@ def assert_simple_cases(pattern, compiler_name, pattern_name):
     assert check_compiler_call(self_match, pattern)
 
     a = relay.Var("a")
+
     plus = fresh_pattern + a
     plus_match = annotate_exact_matches(plus, pattern, compiler_name, pattern_name)
     assert isinstance(plus_match, relay.Call)
@@ -253,6 +254,26 @@ def test_match_whole_match_block():
     assert isinstance(match, relay.Let)
     assert check_compiler_call(match.value, pattern)
     assert isinstance(match.body, relay.TupleGetItem)
+
+    # wrong case: we have a spare free variables
+    c = relay.Var("c")
+    bad_instance = relay.Let(
+        b,
+        relay.Match(relay.Tuple([relay.const(1), relay.const(2)]), [
+            relay.Clause(
+                relay.PatternTuple([
+                    relay.PatternVar(a),
+                    relay.PatternWildcard()
+                ]),
+                relay.Tuple([c, relay.Tuple([])])),
+            relay.Clause(relay.PatternWildcard(),
+                         relay.Tuple([relay.const(3), relay.Tuple([])]))
+        ]),
+        relay.TupleGetItem(b, 0))
+    no_match = annotate_exact_matches(bad_instance, pattern, "MyCompiler", "Match")
+    assert isinstance(no_match, relay.Let)
+    assert not check_compiler_call(no_match.value, pattern)
+    assert isinstance(no_match.body, relay.TupleGetItem)
 
     assert_simple_cases(pattern, "MyCompiler", "MatchBlock")
 
