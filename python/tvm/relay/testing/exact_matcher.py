@@ -238,7 +238,16 @@ def check_match(template, target):
                     return False
             return True
 
-        # punting on refs for now
+        def visit_ref_create(self, ref):
+            return self.check_nested_match(self.template.value, ref.value)
+
+        def visit_ref_read(self, ref_read):
+            return self.check_nested_match(self.template.ref, ref_read.ref)
+
+        def visit_ref_write(self, ref_write):
+            if not self.check_nested_match(self.template.ref, ref_write.ref):
+                return False
+            return self.check_nested_match(self.template.value, ref_write.value)
 
     matcher = Matcher(template)
     res = matcher.check_direct_match(target)
@@ -330,7 +339,6 @@ class MatchMutator(ExprMutator):
             return self.extract_target(match_args)
         return super().visit(expr)
 
-    # warning: will not work on refs because the matcher does not handle them
 
 def annotate_exact_matches(expr, target, compiler_name, composite_name):
     """

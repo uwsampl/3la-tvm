@@ -96,6 +96,11 @@ def assert_simple_cases(pattern, compiler_name, pattern_name):
         True)
     assert check_compiler_call(match_clause_match.clauses[2].rhs, pattern)
 
+    ref = relay.RefCreate(fresh_pattern)
+    ref_match = annotate_exact_matches(ref, pattern, compiler_name, pattern_name)
+    assert isinstance(ref_match, relay.RefCreate)
+    assert check_compiler_call(ref_match.value, pattern)
+
 
 def test_match_misses():
     pattern = relay.nn.dense(relay.Var("v"), relay.Var("w"))
@@ -287,6 +292,18 @@ def test_inconsistent_match():
     assert tvm.ir.structural_equal(result, bad_match, True)
 
 
+def test_ref_match():
+    r, s = relay.Var("r"), relay.Var("s")
+    pattern = relay.RefCreate(relay.Tuple([r, s]))
+    assert_simple_cases(pattern, "MyCompiler", "RefTuple")
+
+    read_pattern = relay.RefRead(r)
+    assert_simple_cases(read_pattern, "MyCompiler", "RefRead")
+
+    write_pattern = relay.RefWrite(r, s)
+    assert_simple_cases(read_pattern, "MyCompiler", "RefWrite")
+
+
 if __name__ == "__main__":
     test_match_misses()
     test_operator_simple_match()
@@ -301,3 +318,4 @@ if __name__ == "__main__":
     test_no_improper_capture()
     test_match_whole_match_block()
     test_inconsistent_match()
+    test_ref_match()
