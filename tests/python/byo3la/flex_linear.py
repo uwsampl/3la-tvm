@@ -7,7 +7,7 @@ import numpy as np
 from tvm import rpc
 # from tvm.contrib import util
 from tvm.relay.op.contrib import ilaflex
-
+from tvm.contrib.ly3la.flexnlp.utils import tool
 #from utils import tool
 
 # define the graph
