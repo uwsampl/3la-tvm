@@ -88,7 +88,8 @@ def lstm_definition(batch_size, input_size, hidden_size, time_steps,
                                              (1, batch_size, hidden_size)))
     # builder.ret(relay.Tuple([stacked, reshape_hidden, reshape_cell]))
     # for simplicity, we will return only the hidden state
-    builder.ret(reshape_hidden)
+    # builder.ret(reshape_hidden)
+    builder.ret(stacked)
 
     # Ideally, we would want to return all outputs;
     # for now, for simplicity, we will only return one
@@ -98,7 +99,8 @@ def lstm_definition(batch_size, input_size, hidden_size, time_steps,
     #     relay.TensorType((1, batch_size, hidden_size)),
     #     relay.TensorType((1, batch_size, hidden_size))
     # ])
-    ret_type = relay.TensorType((1, batch_size, hidden_size))
+    # ret_type = relay.TensorType((1, batch_size, hidden_size))
+    ret_type = relay.TensorType((batch_size, time_steps, hidden_size))
 
     return relay.Function([input_var, state_var, i2h_weight_var, h2h_weight_var,
                            i2h_bias_var, h2h_bias_var],
