@@ -140,7 +140,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
 
       // retrieve the results
       retrieve_result(o_data_ptr, o_data_size, "./data/result.txt");
-#if 1
+#if 0
       LOG(INFO) << "x_dimension: " << x_dim_0 << ", " << x_dim_1;
       LOG(INFO) << "x_data_size: " << x_data_size;
       LOG(INFO) << "y_dimension: " << y_dim_0 << ", " << y_dim_1;
@@ -167,7 +167,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
         std::cout << std::endl;
       }
       // check output data dimension
-      auto out_data_ptr = data_entry_[outputs_[0].id_];
+      auto out_data_ptr = data_entry_[EntryID(outputs_[0])];
       LOG(INFO) << "LSTM output dimension: " << out_data_ptr->ndim;
       for (auto i = 0; i < out_data_ptr->ndim; i++) {
         std::cout << "dim_" << i << ": " << out_data_ptr->shape[i] << '\t';
@@ -227,10 +227,10 @@ class ILAFlexRuntime : public JSONRuntimeBase {
                 bias_data_ptr);
 
       // output
-      // LSTM output is flatten
-      auto eid_o = outputs_[0].id_;
-      auto node_data_o = data_entry_[eid_o];
-      CHECK(node_data_o->ndim == 1);
+      // LSTM output is flatten?
+      // auto eid_o = outputs_[0].id_;
+      auto node_data_o = data_entry_[EntryID(outputs_[0])];
+      CHECK(node_data_o->ndim == 3);
       auto o_data_size = GetDataSize(*node_data_o)/sizeof(float);
       CHECK(o_data_size == 16*num_v_out*num_ts);
       float* o_data_ptr = new float[o_data_size];
@@ -270,7 +270,6 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       // copy the result and resume
       std::copy(o_data_ptr, o_data_ptr + o_data_size,
                 reinterpret_cast<float*>(node_data_o->data));
-      // LOG(FATAL) << "LSTM not yet implemented " << symbol_name_;
     } else {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
@@ -291,7 +290,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
   void retrieve_result(float* data_ptr, unsigned long& size, std::string path) {
     // retrieve flexnlp results
     std::ifstream fin;
-    fin.open("./data/result.txt", std::ios::in);
+    fin.open(path, std::ios::in);
     std::string float_str;
     unsigned long cntr = 0;
 
