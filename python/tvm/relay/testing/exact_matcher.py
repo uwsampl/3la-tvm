@@ -90,8 +90,8 @@ def check_match(template, target):
             Checks if we are comparing the expression to a template variable
             and updates the match dictionary if we are.
 
-            Returns False if we are not comparing to a template var
-            or if the template does not match
+            Returns True for a new match assignment or a consistent match;
+            False for a match inconsistent with previous assignments
             """
             assert self.at_template_var()
             if self.template not in self.matched_exprs:
