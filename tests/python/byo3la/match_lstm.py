@@ -145,7 +145,7 @@ def test_lstm_function_match():
     lstm_var = builder.let("lstm", lstm_definition(batch_size, input_size, hidden_size, time_steps))
     linear_var = builder.let(
         "linear",
-        linear_layer_definition(batch_size, hidden_size, dense_dim))
+        linear_layer_definition(time_steps, hidden_size, dense_dim))
     lstm_res = builder.let(
         "seq_out",
         relay.TupleGetItem(
