@@ -73,6 +73,7 @@ output = output.astype(np.float32)
 print("[Python] Done")
 
 tl = tool()
+ref, bias = tl.get_adpfloat_bias(ref)
 err_out, err_ref = tl.cal_error(output, ref)
 # print(err_out, err_ref)
 print("relative error: {:5.5%} vs. output, {:5.5%} vs. ref".format(err_out, err_ref))
