@@ -7,6 +7,9 @@
 [submodule "3rdparty/rang"]
 	path = 3rdparty/rang
 	url = https://github.com/agauniyal/rang
+[submodule "python/tvm/contrib/ly3la"]
+	path = python/tvm/contrib/ly3la
+	url = git@github.com:LeeOHzzZ/3la_ILA_tensor_op.git
 [submodule "3rdparty/vta-hw"]
 	path = 3rdparty/vta-hw
 	url = git@github.com:uwsampl/3la-vta.git
