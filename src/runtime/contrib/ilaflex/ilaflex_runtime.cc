@@ -38,8 +38,8 @@ class ILAFlexRuntime : public JSONRuntimeBase {
 
     // TODO: we should probably package up all the files inside TVM
     // to avoid having to refer to other directories
-    std::string driver_dir = getenv("TVM_HOME");
-     driver_dir += "/python/tvm/contrib/ly3la/flexnlp"; 
+    std::string driver_dir = getenv("PY_3LA_DRIVER");
+    driver_dir += "flexnlp"; 
 
     if (outputs_.size() == 1 && input_nodes_.size() == 3 &&
         nodes_[outputs_[0].id_].GetOpName() == "ilaflex.linear") {
