@@ -90,7 +90,7 @@ void readILAOutput(const std::string filename, ila_output_data &out_values);
 // will be thrown away in this process
 // returns actual number of bytes read
 // Users should not call this directly
-size_t loadILAOutput(const ila_output_data &out_values, int8_t* buffer, size_t out_h, size_t out_w); 
+size_t loadILAOutput(const ila_output_data &out_values, uint8_t* buffer, size_t out_h, size_t out_w); 
 
 // Run `pattern_name` on ILA simulator and then copy back
 // data produced by the ILA simulator and store into `output_data`

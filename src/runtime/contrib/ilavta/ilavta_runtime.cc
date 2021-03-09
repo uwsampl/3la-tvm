@@ -77,16 +77,16 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int output_size = batch / VTA_BATCH * out_channels / VTA_BLOCK_OUT;
       int wgt_size = in_channels / VTA_BLOCK_IN * out_channels / VTA_BLOCK_OUT;
 
-      int8_t* input = reinterpret_cast<int8_t*>(input_node_data->data);
-      int8_t* weight = reinterpret_cast<int8_t*>(wgt_node_data->data);
+      uint8_t* input = reinterpret_cast<uint8_t*>(input_node_data->data);
+      uint8_t* weight = reinterpret_cast<uint8_t*>(wgt_node_data->data);
 
       VTAGenericInsn *instrs = static_cast<VTAGenericInsn *>(VTAMemAlloc(sizeof(VTAGenericInsn) * num_instr, 0));
 
-      int8_t* input_buf = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * batch * in_channels, 0));
-      int8_t* wgt_buf   = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * out_channels * in_channels, 0));
+      uint8_t* input_buf = reinterpret_cast<uint8_t *>(VTAMemAlloc(sizeof(uint8_t) * batch * in_channels, 0));
+      uint8_t* wgt_buf   = reinterpret_cast<uint8_t *>(VTAMemAlloc(sizeof(uint8_t) * out_channels * in_channels, 0));
       int32_t* acc_buf  = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * batch * out_channels, 0));
       VTAUop* uop_buf   = getGEMMUops(batch / VTA_BATCH, in_channels / VTA_BLOCK_IN, out_channels / VTA_BLOCK_OUT);
-      int8_t* out_buf   = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * out_channels * batch, 0));
+      uint8_t* out_buf   = reinterpret_cast<uint8_t *>(VTAMemAlloc(sizeof(uint8_t) * out_channels * batch, 0));
       VTADeviceHandle device = VTADeviceAlloc();
 
       for (int i = 0; i < batch; ++i) {
@@ -212,7 +212,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
       tvm::runtime::contrib::ila_output_data out_values;
       auto buf_size = GetDataSize(*output_data);
-      int8_t* buffer = new int8_t[buf_size];
+      uint8_t* buffer = new uint8_t[buf_size];
       readILAOutput(output_file, out_values);
       CHECK(out_values.size() == static_cast<size_t>(output_size * VTA_BLOCK_OUT)) << "Output element size mismatch: " << output_size * VTA_BLOCK_OUT << " v.s. " << buf_size;
       
@@ -226,7 +226,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       size_t bufsize_read = loadILAOutput(out_values, buffer, out_h, out_w);
 
       CHECK(bufsize_read == buf_size) << "Number read differs from expected buffer size: " << bufsize_read << " v.s. " << buf_size;
-      memcpy(reinterpret_cast<int8_t*>(output_data->data), buffer, sizeof(int8_t) * buf_size);
+      memcpy(reinterpret_cast<uint8_t*>(output_data->data), buffer, sizeof(uint8_t) * buf_size);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.bias_add") {
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto bias_eid = EntryID(input_nodes_[1], 0);
@@ -265,11 +265,11 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int32_t* input_buf =  reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * batch * in_channels, 0));
       // TVM does array broadcasting over the matrix in bias_add
       int32_t* bias_buf  = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * 1 * bias_channels, 0));
-      int8_t* out_buf   = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * batch * in_channels, 0));
+      uint8_t* out_buf   = reinterpret_cast<uint8_t *>(VTAMemAlloc(sizeof(uint8_t) * batch * in_channels, 0));
       VTADeviceHandle device = VTADeviceAlloc();
 
-      auto input = reinterpret_cast<int8_t*>(input_data->data);
-      auto bias  = reinterpret_cast<int8_t*>(bias_data->data);
+      auto input = reinterpret_cast<uint8_t*>(input_data->data);
+      auto bias  = reinterpret_cast<uint8_t*>(bias_data->data);
       for (int i = 0; i < batch; ++i) {
         for (int j = 0; j < in_channels; ++j) {
           if (i >= n_inp_rows || j >= n_inp_cols) {
@@ -356,7 +356,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
       VTAUop *uop_buf = getReluUops(batch, in_feat);
 
-      int8_t* inputs = reinterpret_cast<int8_t*>(input_data->data);
+      uint8_t* inputs = reinterpret_cast<uint8_t*>(input_data->data);
       for (int i = 0; i < batch; ++i) {
         for (int j = 0; j < in_channels; ++j) {
           if (i >= n_inp_rows || j >= n_inp_cols) {

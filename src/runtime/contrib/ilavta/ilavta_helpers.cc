@@ -245,7 +245,7 @@ void readILAOutput(const std::string filename, ila_output_data &out_values) {
   }
 }
 
-size_t loadILAOutput(const ila_output_data &out_values, int8_t* buffer, size_t out_h, size_t out_w) {
+size_t loadILAOutput(const ila_output_data &out_values, uint8_t* buffer, size_t out_h, size_t out_w) {
   LOG(INFO) << "[Runtime] Copying from output json to byte buffer"; 
 
   size_t data_cur = 0;
@@ -260,7 +260,7 @@ size_t loadILAOutput(const ila_output_data &out_values, int8_t* buffer, size_t o
       std::stringstream ss;
       ss << std::hex << val;
       ss >> temp;
-      buffer[buf_cur++] = static_cast<int8_t>(temp);
+      buffer[buf_cur++] = static_cast<uint8_t>(temp);
     }
   }
   return buf_cur;
@@ -272,11 +272,11 @@ void runSimGetData(std::string pattern_name, size_t output_size, int n_output_ro
   ila_output_data out_data;
   readILAOutput(output_file, out_data);
 
-  int8_t* buffer = new int8_t[output_size];
+  uint8_t* buffer = new uint8_t[output_size];
 
   auto buf_read = loadILAOutput(out_data, buffer, n_output_rows, n_output_cols);
   CHECK(buf_read == output_size) << "Output size mismatch: " << buf_read << " v.s. " << output_size;
-  int8_t* o_data = reinterpret_cast<int8_t*>(output_data);
+  uint8_t* o_data = reinterpret_cast<uint8_t*>(output_data);
   for (size_t i = 0; i < buf_read; ++i) {
     o_data[i] = buffer[i];
   }
