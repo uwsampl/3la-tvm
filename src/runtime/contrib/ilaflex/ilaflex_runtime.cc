@@ -34,12 +34,12 @@ class ILAFlexRuntime : public JSONRuntimeBase {
 
   void Run() override {
     CHECK(symbol_name_.substr(0, 7) == "ilaflex") << symbol_name_;
-    LOG(INFO) << "[Runtime] enter " << symbol_name_ << " runtime";
+    LOG(INFO) << "[Runtime] entering " << symbol_name_ << " runtime";
 
     // TODO: we should probably package up all the files inside TVM
     // to avoid having to refer to other directories
     std::string driver_dir = getenv("PY_3LA_DRIVER");
-    driver_dir += "flexnlp"; 
+    driver_dir += "/flexnlp"; 
 
     if (outputs_.size() == 1 && input_nodes_.size() == 3 &&
         nodes_[outputs_[0].id_].GetOpName() == "ilaflex.linear") {
