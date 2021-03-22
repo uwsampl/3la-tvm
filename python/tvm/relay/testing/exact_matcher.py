@@ -297,7 +297,8 @@ class MatchMutator(ExprMutator):
         (fn(a1, ..., an, attrs={Compiler: compiler_name}) {
             (fn(b1, ..., bn, attrs={
                 Composite: composite_name
-                global_name: composite_name+counter
+                Primitive: 1
+                global_symbol: composite_name+counter
             }) {
                 target expression
                 # note: b1 ... bn are the free vars from the target
@@ -317,8 +318,9 @@ class MatchMutator(ExprMutator):
         outer_args = [relay.Var(f"outer_arg_{i}") for i in range(len(inner_args))]
         outer_func = relay.Function(outer_args, inner_func(*outer_args))
         outer_func = outer_func.with_attr("Compiler", self.compiler_name)
+        outer_func = outer_func.with_attr("Primitive", tvm.tir.IntImm("int32", 1))
         outer_func = outer_func.with_attr(
-            "global_name",
+            "global_symbol",
             f"{self.composite_name}_{self.composite_counter}")
         self.composite_counter += 1
         return outer_func(*match_ordering)
