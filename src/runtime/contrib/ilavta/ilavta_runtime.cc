@@ -222,15 +222,17 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
       int uop_size = batch / VTA_BATCH * in_feat;
       int input_size = batch / VTA_BATCH * in_feat;
-      int output_size = input_size;
+      int output_size = input_size / 4;
 
       VTAGenericInsn *instrs = static_cast<VTAGenericInsn *>(VTAMemAlloc(sizeof(VTAGenericInsn) * num_instr, 0));
 
-      int32_t* input_buf =  reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * batch * in_channels, 0));
+      // int32_t* input_buf =  reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * batch * in_channels, 0));
       // TVM does array broadcasting over the matrix in bias_add
-      int32_t* bias_buf  = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * 1 * bias_channels, 0));
+      // int32_t* bias_buf  = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * 1 * bias_channels, 0));
       uint8_t* out_buf   = reinterpret_cast<uint8_t *>(VTAMemAlloc(sizeof(uint8_t) * batch * in_channels, 0));
-      VTADeviceHandle device = VTADeviceAlloc();
+      // VTADeviceHandle device = VTADeviceAlloc();
+      uint32_t* combined_acc = reinterpret_cast<uint32_t*>(VTAMemAlloc(sizeof(uint32_t) * (bias_channels + batch * in_channels), 0));
+      size_t acc_ptr = 0;
 
       auto input = reinterpret_cast<uint8_t*>(input_data->data);
       auto bias  = reinterpret_cast<uint8_t*>(bias_data->data);
@@ -238,62 +240,37 @@ class ILAVTARuntime : public JSONRuntimeBase {
         for (int j = 0; j < in_channels; ++j) {
           if (i >= n_inp_rows || j >= n_inp_cols) {
             // zero padding
-            input_buf[i * in_channels + j] = 0;
-            bias_buf[i * in_channels + j] = 0;
+            combined_acc[acc_ptr++] = 0;
+            // input_buf[i * in_channels + j] = 0;
+            // bias_buf[i * in_channels + j] = 0;
           } else {
-            input_buf[i * in_channels + j] = input[i * n_inp_cols + j];
+            // input_buf[i * in_channels + j] = input[i * n_inp_cols + j];
+            combined_acc[acc_ptr++] = input[i * n_inp_cols + j];
           }
         }
       }
 
       for (int i = 0; i < in_channels; ++i) {
         if (i < n_inp_cols) {
-          bias_buf[i] = bias[i];
+          // bias_buf[i] = bias[i];
+          combined_acc[acc_ptr++] = bias[i];
         } else {
-          bias_buf[i] = 0;
+          // bias_buf[i] = 0;
+          combined_acc[acc_ptr++] = 0;
         }
       }
 
       VTAUop* uop_buf   = getBiasAddUops(batch / VTA_BATCH, in_channels / VTA_BLOCK_IN);
-
-      int ptr = 0;
-      instrs[ptr++] = get1DLoadStoreInsn(
-        VTA_OPCODE_LOAD,
-        VTA_MEM_ID_UOP,
-        0, VTAMemGetPhyAddr(uop_buf) / VTA_UOP_ELEM_BYTES, uop_size, 0, 0, 0, 0);
       
-      instrs[ptr++] = get1DLoadStoreInsn(
-        VTA_OPCODE_LOAD,
-        VTA_MEM_ID_ACC,
-        input_size, VTAMemGetPhyAddr(bias_buf) / VTA_ACC_ELEM_BYTES, output_size, 0, 0, 0, 0
-      );
+      std::string data_dump = dump_datafile(nullptr, 0, nullptr, 0, combined_acc, acc_ptr, uop_buf, uop_size, "ilavta_bias_add");
+      std::string ila_asm   = compile_bias_add(batch, n_inp_cols, "ilavta_bias_add");
 
-      instrs[ptr++] = get1DLoadStoreInsn(
-        VTA_OPCODE_LOAD,
-        VTA_MEM_ID_ACC,
-        0, VTAMemGetPhyAddr(input_buf) / VTA_ACC_ELEM_BYTES, input_size, 0, 0, 0, 0
-      );
+      // VTAMemFree(input_buf);
+      // VTAMemFree(bias_buf);
+      // VTAMemFree(out_buf);
+      // VTADeviceFree(device);
 
-      instrs[ptr++] = getAluInsn(
-        VTA_ALU_OPCODE_ADD,
-        0, uop_size, false, 0, 0, 0, 0, 1);
-      
-      instrs[ptr++] = get1DLoadStoreInsn(
-        VTA_OPCODE_STORE,
-        VTA_MEM_ID_OUT,
-        0, VTAMemGetPhyAddr(out_buf) / VTA_OUT_ELEM_BYTES, output_size, 1, 0, 1, 0
-      );
-
-      instrs[ptr++] = getFinishInsn(0, 1);
-
-      VTADeviceRun(device, VTAMemGetPhyAddr(instrs), ptr, 1000);
-
-      VTAMemFree(input_buf);
-      VTAMemFree(bias_buf);
-      VTAMemFree(out_buf);
-      VTADeviceFree(device);
-
-      runSimGetData("ilavta_bias_add", output_buffer_size, n_inp_rows, n_inp_cols, output_data->data);
+      runSimGetData("ilavta_bias_add", ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.relu") {
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto output_eid = outputs_[0].id_;
@@ -316,7 +293,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int num_instrs = 64;
       VTADeviceHandle device = VTADeviceAlloc();
       VTAGenericInsn *instrs = static_cast<VTAGenericInsn *>(VTAMemAlloc(sizeof(VTAGenericInsn) * num_instrs, 0));
-      int32_t* input_buf = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * batch * in_channels, 0));
+      uint32_t* input_buf = reinterpret_cast<uint32_t *>(VTAMemAlloc(sizeof(uint32_t) * batch * in_channels, 0));
 
       VTAUop *uop_buf = getReluUops(batch, in_feat);
 
@@ -331,37 +308,20 @@ class ILAVTARuntime : public JSONRuntimeBase {
           }
         }
       }
-
-      int ptr = 0;
-      instrs[ptr++] = get1DLoadStoreInsn(
-        VTA_OPCODE_LOAD,
-        VTA_MEM_ID_UOP,
-        0, VTAMemGetPhyAddr(uop_buf) / VTA_UOP_ELEM_BYTES, uop_size, 0, 0, 0, 0);
-
-      instrs[ptr++] = get1DLoadStoreInsn(
-        VTA_OPCODE_LOAD,
-        VTA_MEM_ID_ACC,
-        0, VTAMemGetPhyAddr(input_buf) / VTA_ACC_ELEM_BYTES, input_size, 0, 0, 0, 0
-      );
-
-      instrs[ptr++] = getAluInsn(VTA_ALU_OPCODE_MAX, 0, uop_size, true, 0, 0, 0, 0, 1);
       
-      instrs[ptr++] = get1DLoadStoreInsn(
-        VTA_OPCODE_STORE,
-        VTA_MEM_ID_OUT,
-        0, VTAMemGetPhyAddr(input_buf) / VTA_OUT_ELEM_BYTES, sim_output_size, 1, 0, 1, 0
-      );
-
-      instrs[ptr++] = getFinishInsn(0, 1);
-
-      VTADeviceRun(device, VTAMemGetPhyAddr(instrs), ptr, 1000);
+      std::string data_dump = dump_datafile(nullptr, 0,
+                                            nullptr, 0,
+                                            input_buf, batch * in_channels,
+                                            uop_buf, uop_size,
+                                            "ilavta_relu");
+      std::string ila_asm = compile_relu(batch, n_inp_cols, "ilavta_relu");
 
       VTAMemFree(input_buf);
       VTAMemFree(uop_buf);
       VTAMemFree(instrs);
       VTADeviceFree(device);
 
-      runSimGetData("ilavta_relu", output_buffer_size, n_inp_rows, n_inp_cols, output_data->data);
+      runSimGetData("ilavta_relu", ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data);
     }
   }
 

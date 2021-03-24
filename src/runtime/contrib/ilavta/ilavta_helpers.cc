@@ -211,8 +211,8 @@ VTAGenericInsn get2DLoadStoreInsn(int opcode, int type, int sram_offset, int dra
 }
 
 std::string runILASimulator(const std::string exp_name,
-                            const std::string ila_asm = "",
-                            const std::string data_dump = "", bool use_trace = true) {
+                            const std::string ila_asm,
+                            const std::string data_dump, bool use_trace) {
   // Check dump file
   std::string input_filename = exp_name + "_input.json";
   std::string output_filename = exp_name + "_out.json";
@@ -274,8 +274,9 @@ size_t loadILAOutput(const ila_output_data &out_values, uint8_t* buffer, size_t 
   return buf_cur;
 }
 
-void runSimGetData(std::string pattern_name, size_t output_size, int n_output_rows, int n_output_cols, void *output_data) {
-  std::string output_file = runILASimulator(pattern_name);
+void runSimGetData(std::string pattern_name, std::string ila_asm, std::string data_dump,
+                  size_t output_size, int n_output_rows, int n_output_cols, void *output_data) {
+  std::string output_file = runILASimulator(pattern_name, ila_asm, data_dump, false);
 
   ila_output_data out_data;
   readILAOutput(output_file, out_data);

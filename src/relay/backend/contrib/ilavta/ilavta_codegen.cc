@@ -39,30 +39,29 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
       auto comp = fn->GetAttr<String>(attr::kComposite);
       CHECK(comp.defined())
           << "JSON runtime only supports composite functions.";
-      CHECK(symbol_name.defined()) << "Cannot get global_symbol attr from FunctionNode " << cn->args.size();
       name = comp.value();
       if (!(name == "ilavta.conv2d" || name == "ilavta.bias_add" || name == "ilavta.dense" || name == "ilavta.relu")) {
         LOG(FATAL) << "Unrecognized pattern: " << name;
       }
       if (name == "ilavta.dense") {
         LOG(INFO) << "ilavta.dense pattern";
-        auto input_shape = GetShape(cn->args[0]->checked_type());
-        auto weight_shape = GetShape(cn->args[1]->checked_type());
-        int batch = input_shape[0];
-        int n_inp_cols = input_shape[1];
-        int n_wgt_rows = weight_shape[0];
+        // auto input_shape = GetShape(cn->args[0]->checked_type());
+        // auto weight_shape = GetShape(cn->args[1]->checked_type());
+        // int batch = input_shape[0];
+        // int n_inp_cols = input_shape[1];
+        // int n_wgt_rows = weight_shape[0];
         // backend::contrib::compile_gemm(batch, n_inp_cols, n_wgt_rows, "./prog_frag/" + global_name);
       }  else if (name == "ilavta.bias_add") {
         LOG(INFO) << "ilavta.bias_add pattern";
-        auto input_shape = GetShape(cn->args[0]->checked_type());
-        int batch = input_shape[0];
-        int n_feat = input_shape[1];
+        // auto input_shape = GetShape(cn->args[0]->checked_type());
+        // int batch = input_shape[0];
+        // int n_feat = input_shape[1];
         // backend::contrib::compile_bias_add(batch, n_feat, "./prog_frag/" + global_name);
       } else if (name == "ilavta.relu") {
         LOG(INFO) << "ilavta.relu pattern";
-        auto input_shape = GetShape(cn->args[0]->checked_type());
-        int batch = input_shape[0];
-        int n_feat = input_shape[1];
+        // auto input_shape = GetShape(cn->args[0]->checked_type());
+        // int batch = input_shape[0];
+        // int n_feat = input_shape[1];
         // backend::contrib::compile_relu(batch, n_feat, "./prog_frag/" + global_name);
       }
     } else {

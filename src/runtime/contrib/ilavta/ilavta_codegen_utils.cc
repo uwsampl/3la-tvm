@@ -4,7 +4,7 @@
 #define json_value(v) (picojson::value(v))
 
 namespace tvm {
-namespace relay {
+namespace runtime {
 namespace contrib {
 
 using namespace nlohmann;
@@ -267,4 +267,4 @@ std::string compile_relu(int batch, size_t n_feat, std::string filename) {
 }
 }
 }
-}
+

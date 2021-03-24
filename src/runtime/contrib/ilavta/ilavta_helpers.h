@@ -97,7 +97,8 @@ size_t loadILAOutput(const ila_output_data &out_values, uint8_t* buffer, size_t 
 // Run `pattern_name` on ILA simulator and then copy back
 // data produced by the ILA simulator and store into `output_data`
 // This is the interface provided to users
-void runSimGetData(std::string pattern_name, size_t output_size, int n_output_rows, int n_output_cols, void *output_data);
+void runSimGetData(std::string pattern_name, std::string ila_asm, std::string data_dump,
+                   size_t output_size, int n_output_rows, int n_output_cols, void *output_data);
 
 // Compile to ILA ASM and return the path to the destination file
 std::string compile_gemm(int batch, size_t num_features, size_t num_hidden, std::string filename);
