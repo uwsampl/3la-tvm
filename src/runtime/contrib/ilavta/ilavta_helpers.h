@@ -76,7 +76,9 @@ VTAGenericInsn get2DLoadStoreInsn(int opcode, int type, int sram_offset, int dra
 // Calls the ILA simularor; The result will be stored
 // in `./result`
 // Users should not call this directly
-std::string runILASimulator(const std::string exp_name); 
+std::string runILASimulator(const std::string exp_name,
+                            const std::string ila_asm = "",
+                            const std::string data_dump = "", bool use_trace = true);
 
 // Read back the result produced by the ILA simulator.
 // The results will be stored in `out_values`.
@@ -96,6 +98,19 @@ size_t loadILAOutput(const ila_output_data &out_values, uint8_t* buffer, size_t 
 // data produced by the ILA simulator and store into `output_data`
 // This is the interface provided to users
 void runSimGetData(std::string pattern_name, size_t output_size, int n_output_rows, int n_output_cols, void *output_data);
+
+// Compile to ILA ASM and return the path to the destination file
+std::string compile_gemm(int batch, size_t num_features, size_t num_hidden, std::string filename);
+std::string compile_bias_add(int batch, size_t num_features, std::string filename);
+std::string compile_relu(int batch, size_t num_features, std::string filename);
+
+// Create a data dump which could be used paired with an ILA ASM to produce
+// the ILA program fragment
+std::string dump_datafile(uint8_t* input_buf, size_t input_size,
+                   uint8_t* weight_buf, size_t weight_size,
+                   uint32_t* acc_buf, size_t acc_size,
+                   VTAUop* uop_buf, size_t uop_size,
+                   std::string filename);
 
 }
 }

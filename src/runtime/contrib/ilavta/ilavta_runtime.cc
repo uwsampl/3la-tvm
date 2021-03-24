@@ -160,51 +160,15 @@ class ILAVTARuntime : public JSONRuntimeBase {
         acc_buf[i] = 0;
       }
 
-      instrs[ptr++] = get1DLoadStoreInsn(
-        VTA_OPCODE_LOAD,
-        VTA_MEM_ID_UOP,
-        0, VTAMemGetPhyAddr(uop_buf) / VTA_UOP_ELEM_BYTES, uop_size, 0, 0, 0, 0);
+      std::string data_file = dump_datafile(input_buf, batch * in_channels,
+                    wgt_buf, in_channels * out_channels,
+                    nullptr, 0,
+                    uop_buf, uop_size,
+                    "ilavta_dense");
       
-      instrs[ptr++] = get1DLoadStoreInsn(
-        VTA_OPCODE_LOAD,
-        VTA_MEM_ID_ACC,
-        0, VTAMemGetPhyAddr(acc_buf) / VTA_ACC_ELEM_BYTES, output_size, 0, 0, 1, 0
-      );
+      std::string ila_asm = compile_gemm(batch, n_inp_cols, n_wgt_rows, "ilavta_dense");
 
-      instrs[ptr++] = get1DLoadStoreInsn(
-        VTA_OPCODE_LOAD,
-        VTA_MEM_ID_WGT,
-        0, VTAMemGetPhyAddr(wgt_buf) / VTA_WGT_ELEM_BYTES, wgt_size, 0, 1, 0, 0
-      );
-
-      instrs[ptr++] = get1DLoadStoreInsn(
-        VTA_OPCODE_LOAD,
-        VTA_MEM_ID_INP,
-        0, VTAMemGetPhyAddr(input_buf) / VTA_INP_ELEM_BYTES, input_size, 0, 0, 0, 1
-      );
-
-      instrs[ptr++] = getGEMMInsn(
-        0,
-        batch / VTA_BATCH,
-        in_channels / VTA_BLOCK_IN,
-        out_channels / VTA_BLOCK_OUT,
-        0,
-        1, 0, 0, 1
-      );
-
-      instrs[ptr++] = get1DLoadStoreInsn(
-        VTA_OPCODE_STORE,
-        VTA_MEM_ID_OUT,
-        0, VTAMemGetPhyAddr(out_buf) / VTA_OUT_ELEM_BYTES,
-        output_size, 1, 0, 1, 0
-      );
-
-      instrs[ptr++] = getFinishInsn(0, 1);
-
-      VTADeviceRun(device, VTAMemGetPhyAddr(instrs), ptr, 1000);
-
-      auto output_file = runILASimulator("ilavta_dense");
-      
+      auto output_file = runILASimulator("ilavta_dense", ila_asm, data_file, false);
       auto output_node_id = outputs_[0].id_;
       auto output_data = data_entry_[output_node_id];
 

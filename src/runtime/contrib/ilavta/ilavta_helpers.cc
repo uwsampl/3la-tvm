@@ -210,17 +210,25 @@ VTAGenericInsn get2DLoadStoreInsn(int opcode, int type, int sram_offset, int dra
   return converter.generic;
 }
 
-std::string runILASimulator(const std::string exp_name) {
+std::string runILASimulator(const std::string exp_name,
+                            const std::string ila_asm = "",
+                            const std::string data_dump = "", bool use_trace = true) {
   // Check dump file
   std::string input_filename = exp_name + "_input.json";
   std::string output_filename = exp_name + "_out.json";
-  auto ret = std::system("stat vta_sim_dump.json > /dev/null 2> /dev/null");
-  CHECK(ret == 0) << "vta_sim_dump.json does not exists";
+  if (use_trace) {
+    auto ret = std::system("stat vta_sim_dump.json > /dev/null 2> /dev/null");
+    CHECK(ret == 0) << "vta_sim_dump.json does not exists";
 
-  ret = std::system(("python3 produce_ila_fragment.py vta_sim_dump.json ./prog_frag/" + input_filename).c_str());
-  CHECK(ret == 0) << "Failed to produce program fragment";
-  
-  ret = std::system(("vta_ila_sim " + exp_name).c_str());
+    ret = std::system(("python3 produce_ila_fragment.py vta_sim_dump.json ./prog_frag/" + input_filename).c_str());
+    CHECK(ret == 0) << "Failed to produce program fragment";
+  } else {
+    CHECK(std::system(("python3 produce_prog_frag.py "
+                      + ila_asm + " "
+                      + data_dump + " "
+                      + "./prog_frag/" + input_filename).c_str()) == 0) << "Failed to convert to program fragment";
+  }
+  int ret = std::system(("vta_ila_sim " + exp_name).c_str());
   CHECK(ret == 0) << "Failed to run ILA simulator";
 
   ret = std::system(("stat ./result/" + output_filename + " > /dev/null 2> /dev/null").c_str());
