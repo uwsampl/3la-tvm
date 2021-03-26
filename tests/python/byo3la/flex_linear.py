@@ -7,8 +7,8 @@ import numpy as np
 from tvm import rpc
 # from tvm.contrib import util
 from tvm.relay.op.contrib import ilaflex
-# from tvm.contrib.ly3la.flexnlp.utils import tool
 from flexnlp.src.utils import tool
+from tvm.relay.testing import annotate_exact_matches, check_compiler_call
 #from utils import tool
 
 # define the graph

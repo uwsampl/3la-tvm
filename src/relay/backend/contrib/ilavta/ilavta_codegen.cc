@@ -37,21 +37,22 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
       name = op_node->name;
     } else if (const auto* fn = cn->op.as<FunctionNode>()) {
       auto comp = fn->GetAttr<String>(attr::kComposite);
-      CHECK(comp.defined()) << "JSON runtime only supports composite functions.";
+      CHECK(comp.defined())
+          << "JSON runtime only supports composite functions.";
       name = comp.value();
-      if (!(name == "ilavta.conv2d" || name == "ilavta.bias_add" || name == "ilavta.dense" ||
-            name == "ilavta.relu")) {
+      if (!(name == "ilavta.conv2d" || name == "ilavta.bias_add" || name == "ilavta.dense" || name == "ilavta.relu")) {
         LOG(FATAL) << "Unrecognized pattern: " << name;
       }
       if (name == "ilavta.dense") {
         LOG(INFO) << "ilavta.dense pattern";
-      } else if (name == "ilavta.bias_add") {
+      }  else if (name == "ilavta.bias_add") {
         LOG(INFO) << "ilavta.bias_add pattern";
       } else if (name == "ilavta.relu") {
         LOG(INFO) << "ilavta.relu pattern";
       }
     } else {
-      LOG(FATAL) << "ILAVTA runtime does not support calls to " << cn->op->GetTypeKey();
+      LOG(FATAL) << "ILAVTA runtime does not support calls to "
+                 << cn->op->GetTypeKey();
     }
     LOG(INFO) << "[Pattern Matching] Find annotated: " << name;
 
