@@ -234,4 +234,4 @@ conda/pkg
 .envrc
 *.nix
 
-tests/python/byo3la/EfficientNet/*
+tests/python/byo3la/*.params

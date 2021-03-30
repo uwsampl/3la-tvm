@@ -12,24 +12,23 @@ from tvm import relay
 from tvm import runtime
 from tvm.relay.op.contrib import ilacnn
 
+from EfficientNet.efficientnet_model import get_efficientnet
+
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 ENET_DIR = os.path.join(TEST_DIR, "EfficientNet")
 PARAMS_FILE = os.path.join(ENET_DIR, "0.3358-imagenet-efficientnet-b0-47-best.params")
 
-def efficientnet_present():
-    return os.path.exists(ENET_DIR) and os.path.exists(PARAMS_FILE)
+def data_present():
+    return os.path.exists(PARAMS_FILE)
 
 
-def pull_efficientnet():
-    subprocess.run(["rm", "-rf", ENET_DIR])
-    subprocess.run(["git", "clone", "https://github.com/mnikitin/EfficientNet.git"], cwd=TEST_DIR)
+def get_data():
     subprocess.run(["wget", "https://www.dropbox.com/s/l2ehu85vmmj3w5w/0.3358-imagenet-efficientnet-b0-47-best.params"], cwd=ENET_DIR)
 
 
 def main():
-    if not efficientnet_present():
-        pull_efficientnet()
-    from EfficientNet.efficientnet_model import get_efficientnet
+    if not data_present():
+        get_data()
 
     enet, _ = get_efficientnet("efficientnet-b0")
     enet.load_parameters(PARAMS_FILE)
