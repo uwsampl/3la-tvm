@@ -39,7 +39,10 @@ class ILAFlexRuntime : public JSONRuntimeBase {
     // TODO: we should probably package up all the files inside TVM
     // to avoid having to refer to other directories
     std::string driver_dir = getenv("PY_3LA_DRIVER");
-    driver_dir += "/flexnlp"; 
+
+    driver_dir += "flexnlp"; 
+    LOG(INFO) << "[Runtime] operator name is " << nodes_[outputs_[0].id_].GetOpName();
+    LOG(INFO) << "outputs size: " << outputs_.size() << '\t' << "input_size: " << input_nodes_.size();
 
     if (outputs_.size() == 1 && input_nodes_.size() == 3 &&
         nodes_[outputs_[0].id_].GetOpName() == "ilaflex.linear") {
@@ -62,7 +65,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
        *  - dimension: (o_dim_0, o_dim_1)
        *  - data: o_data_ptr, o_data_size
        */
-
+      LOG(INFO) << "[Runtime] operator name is " << nodes_[outputs_[0].id_].GetOpName();
       // x
       auto eid_x = EntryID(input_nodes_[0], 0);
       auto& node_data_x = data_entry_[eid_x];
@@ -122,10 +125,15 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       dump_data(z_data_ptr, z_data_size, "./data/bias.txt");
 
       // calculate flexnlp tensor assembly parameters;
+      CHECK(x_dim_1 % 16 == 0) "linear_layer input timestep size is: " << x_dim_1;
+      CHECK(y_dim_0 % 16 == 0) "linear_layer output timestep size is: " << y_dim_0;
+      CHECK(z_dim_0 % 16 == 0) "linear_layer bias size is: " << z_dim_0;
+      CHECK(y_dim_0 == z_dim_0) "linear_layer bias size different from output timestep size";
       int num_vector_in = x_dim_1/16;
       int num_vector_out = y_dim_0/16;
       int num_timestep = x_dim_0;
       int is_bias = 1;
+      CHECK(num_vector_out % 4 == 0) "linear_layer output vector number is : " << num_vector_out;
 
       // call ILAng-generated simulator
       std::stringstream call_builder;
@@ -154,8 +162,10 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       std::copy(o_data_ptr, o_data_ptr + o_data_size,
                 reinterpret_cast<float*>(node_data_o->data));
 
-    } else if (outputs_.size() == 1
-               && nodes_[outputs_[0].id_].GetOpName() == "ilaflex.lstm") {
+    } 
+    else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilaflex.lstm") {
+    // else if (nodes_[outputs_[0].id_].GetOpName() == "ilaflex.lstm") {
+      LOG(INFO) << "[Runtime] operator name is " << nodes_[outputs_[0].id_].GetOpName();
       LOG(INFO) << "LSTM input nodes size: " << input_nodes_.size();
       // TODO: why initial state only has single vector?
       for (auto it : input_nodes_) {
@@ -180,10 +190,8 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       auto& node_data_inp = data_entry_[eid_inp];
       CHECK(node_data_inp->ndim == 3);
       auto num_ts = node_data_inp->shape[1];
+      CHECK(node_data_inp->shape[2] % 16 == 0);
       auto num_v_in = (int)(node_data_inp->shape[2])/16;
-      auto num_v_out = num_v_in;
-      // current flexnlp driver enable 4 PEs by default
-      CHECK(num_v_in%4 == 0);
       auto inp_data_size = GetDataSize(*node_data_inp)/sizeof(float);
       float* inp_data_ptr = new float[inp_data_size];
       std::copy(reinterpret_cast<float*>(node_data_inp->data),
@@ -198,6 +206,8 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       auto& node_data_i2h_wgt = data_entry_[eid_i2h_wgt];
       CHECK(node_data_i2h_wgt->ndim == 2);
       auto i2h_wgt_data_size = GetDataSize(*node_data_i2h_wgt)/sizeof(float);
+
+      auto num_v_out = (int)(node_data_i2h_wgt->shape[0])/64;
       CHECK(i2h_wgt_data_size == 16*num_v_in * 4 * 16*num_v_out);
       float* i2h_wgt_data_ptr = new float[i2h_wgt_data_size];
       std::copy(reinterpret_cast<float*>(node_data_i2h_wgt->data),
@@ -209,7 +219,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       auto& node_data_h2h_wgt = data_entry_[eid_h2h_wgt];
       CHECK(node_data_h2h_wgt->ndim == 2);
       auto h2h_wgt_data_size = GetDataSize(*node_data_h2h_wgt)/sizeof(float);
-      CHECK(h2h_wgt_data_size == 16*num_v_in * 4 * 16*num_v_out);
+      CHECK(h2h_wgt_data_size == 16*num_v_out * 4 * 16*num_v_out);
       float* h2h_wgt_data_ptr = new float[h2h_wgt_data_size];
       std::copy(reinterpret_cast<float*>(node_data_h2h_wgt->data),
                 reinterpret_cast<float*>(node_data_h2h_wgt->data) + h2h_wgt_data_size,
@@ -220,7 +230,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       auto& node_data_bias = data_entry_[eid_bias];
       CHECK(node_data_bias->ndim == 1);
       auto bias_data_size = GetDataSize(*node_data_bias)/sizeof(float);
-      CHECK(bias_data_size == 4 * 16*num_v_in);
+      CHECK(bias_data_size == 4 * 16*num_v_out);
       float* bias_data_ptr = new float[bias_data_size];
       std::copy(reinterpret_cast<float*>(node_data_bias->data),
                 reinterpret_cast<float*>(node_data_bias->data) + bias_data_size,
