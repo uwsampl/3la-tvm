@@ -36,9 +36,9 @@ class MultilayerPerceprtron(torch.nn.Module):
 
 def run_passes(mod):
     patterns = ilavta.pattern_table()
-    # mod = tvm.relay.transform.MergeComposite(patterns)(mod)
-    # mod = tvm.relay.transform.AnnotateTarget('ilavta')(mod)
-    # mod = tvm.relay.transform.PartitionGraph()(mod)
+    mod = tvm.relay.transform.MergeComposite(patterns)(mod)
+    mod = tvm.relay.transform.AnnotateTarget('ilavta')(mod)
+    mod = tvm.relay.transform.PartitionGraph()(mod)
     print('[Python] Transformation complete')
     mod = relay.transform.InferType()(mod)
     return mod
@@ -78,29 +78,29 @@ def main():
         mod = run_passes(relay_model)
     prog = mod['main']
     print(prog)
-    with vta.build_config(opt_level=3, disabled_pass={"AlterOpLayout"}):
-        mod = tvm.relay.build(prog, target=tvm.target.vta(model="sim_1x16_i8w8a32_15_15_18_17"), params=params, target_host=tvm.target.Target('llvm'))
-    print(mod['default'](tvm.cpu()))
-    m = graph_runtime.GraphModule(mod['default'](tvm.cpu()))
-    m.set_input("input", feature.view(-1, 28 * 28))
+    #with vta.build_config(opt_level=3, disabled_pass={"AlterOpLayout"}):
+    #    mod = tvm.relay.build(prog, target=tvm.target.vta(model="sim_1x16_i8w8a32_15_15_18_17"), params=params, target_host=tvm.target.Target('llvm'))
+    # print(mod['default'](tvm.cpu()))
+    # m = graph_runtime.GraphModule(mod['default'](tvm.cpu()))
+    # m.set_input("input", feature.view(-1, 28 * 28))
     # m.set_input("linear_1._packed_params_weight", weight_0) 
     # m.set_input("linear_1._packed_params_bias",   bias_0)
     # m.set_input("linear_2._packed_params_weight", weight_1)
     # m.set_input("linear_2._packed_params_bias",   bias_1)
     # m.set_input("linear_out._packed_params_weight", weight_2)
     # m.set_input("linear_out._packed_params_bias",   bias_2)
-    m.run()
-    o = m.get_output(0).asnumpy()
-    print(o)
-    # target = tvm.target.create('llvm')
-    # ctx = tvm.cpu()
-    # vm = tvm.relay.create_executor('vm', ctx=ctx, target=target, mod=mod)
-    # executor = vm.evaluate()
-    # result = executor(feature.view(-1, 28 * 28).numpy(), weight_0, bias_0, weight_1, bias_1, weight_2, bias_2)
-    # logits, probas = result
-    # probas = probas.asnumpy()
-    # _, predicted_labels = torch.max(torch.Tensor(probas), 1)
-    # print((predicted_labels == targets).sum().item() / targets.size(0))
+    # m.run()
+    # o = m.get_output(0).asnumpy()
+    # print(o)
+    target = tvm.target.create('llvm')
+    ctx = tvm.cpu()
+    vm = tvm.relay.create_executor('vm', ctx=ctx, target=target, mod=mod)
+    executor = vm.evaluate()
+    result = executor(feature.view(-1, 28 * 28).numpy(), weight_0, bias_0, weight_1, bias_1, weight_2, bias_2)
+    logits, probas = result
+    probas = probas.asnumpy()
+    _, predicted_labels = torch.max(torch.Tensor(probas), 1)
+    print((predicted_labels == targets).sum().item() / targets.size(0))
 
 if __name__ == '__main__':
     main()
