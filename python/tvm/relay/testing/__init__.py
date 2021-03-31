@@ -50,6 +50,8 @@ from .exact_matcher import annotate_exact_matches
 # these are just for testing
 from .exact_matcher import deduplicate_vars, check_compiler_call
 
+from .op_summary import count_all_ops, count_all_overloads, count_all_ops_in_overloads
+
 def run_opt_pass(expr, opt_pass, import_prelude=False):
     assert isinstance(opt_pass, tvm.transform.Pass)
     mod = tvm.IRModule.from_expr(expr)
