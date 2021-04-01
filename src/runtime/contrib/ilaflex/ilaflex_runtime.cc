@@ -41,8 +41,6 @@ class ILAFlexRuntime : public JSONRuntimeBase {
     std::string driver_dir = getenv("PY_3LA_DRIVER");
 
     driver_dir += "flexnlp"; 
-    LOG(INFO) << "[Runtime] operator name is " << nodes_[outputs_[0].id_].GetOpName();
-    LOG(INFO) << "outputs size: " << outputs_.size() << '\t' << "input_size: " << input_nodes_.size();
 
     if (outputs_.size() == 1 && input_nodes_.size() == 3 &&
         nodes_[outputs_[0].id_].GetOpName() == "ilaflex.linear") {
@@ -139,7 +137,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       std::stringstream call_builder;
       call_builder << "python3 " << driver_dir << "/linear_layer_driver.py "
                    << num_vector_in << " " << num_vector_out << " "
-                   << num_timestep << " " << is_bias;
+                   << num_timestep << " " << is_bias << " " << symbol_name_;
       std::string call_cmd = call_builder.str();
 
       LOG(INFO) << "calling flexnlp linear layer driver";
@@ -268,7 +266,8 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       std::stringstream call_builder;
       call_builder << "python3 " << driver_dir << "/lstm_driver.py "
                    << num_v_in << " " << num_v_out << " "
-                   << num_ts << " " << is_bias << " " << is_zero_first;
+                   << num_ts << " " << is_bias << " " << is_zero_first << " "
+                   << symbol_name_;
       std::string call_cmd = call_builder.str();
 
       LOG(INFO) << "calling flexnlp lstm driver";
