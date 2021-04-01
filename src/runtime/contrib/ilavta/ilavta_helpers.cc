@@ -357,7 +357,7 @@ void runSimGetData(std::string pattern_name, std::string ila_asm, std::string da
   uint8_t* buffer = new uint8_t[output_size];
 
   auto buf_read = loadILAOutput(out_data, buffer, n_output_rows, n_output_cols);
-  CHECK(buf_read == output_size) << "Output size mismatch: " << buf_read << " v.s. " << output_size;
+  // CHECK(buf_read == output_size) << "Output size mismatch: " << buf_read << " v.s. " << output_size;
   uint8_t* o_data = reinterpret_cast<uint8_t*>(output_data);
   for (size_t i = 0; i < buf_read; ++i) {
     o_data[i] = buffer[i];
