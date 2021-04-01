@@ -60,7 +60,7 @@ could override ``VisitExpr``:
 
     void PrintVisitor::VisitExpr(const Expr& expr) {
       std::cout << "Here" << std::endl;
-      ::VisitExpr(expr);
+      ExprFunctor::VisitExpr(expr);
     }
 
 ``ExprFunctor`` itself is a very general class, which is why more often than
