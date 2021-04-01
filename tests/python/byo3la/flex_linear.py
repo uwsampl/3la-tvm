@@ -9,7 +9,6 @@ from tvm import rpc
 from tvm.relay.op.contrib import ilaflex
 
 from flexnlp.src.utils import tool
-from tvm.relay.testing import annotate_exact_matches, check_compiler_call
 
 #from utils import tool
 
