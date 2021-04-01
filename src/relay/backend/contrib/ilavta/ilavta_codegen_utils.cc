@@ -1,14 +1,11 @@
 #include <iomanip>
-#include "ilavta_helpers.h"
-#include "json.hpp"
-#define json_value(v) (picojson::value(v))
+#include "ilavta_codegen_utils.h"
 
 namespace tvm {
-namespace runtime {
+namespace relay {
 namespace contrib {
 
 using namespace nlohmann;
-using namespace tvm::runtime;
 using addr_byte_pairs = std::vector<std::pair<vta_phy_addr_t, uint8_t>>;
 
 json byte_pairs_to_json(const addr_byte_pairs& byte_pairs) {
@@ -146,81 +143,13 @@ json getAluAsm(int alu_opcode, int uop_bgn, int uop_end, bool use_imm, int imm) 
   };
 }
 
-template <class T>
-std::string to_hex(T x) {
-    std::stringstream ss;
-    ss << "0x" << std::setfill('0')
-               << std::setw(sizeof(T) * 2)
-               << std::hex << static_cast<uint64_t>(x);
-    return ss.str();
-}
-
-std::string dump_datafile(uint8_t* input_buf, size_t input_size,
-                   uint8_t* weight_buf, size_t weight_size,
-                   uint32_t* acc_buf, size_t acc_size,
-                   VTAUop* uop_buf, size_t uop_size,
-                   std::string filename) {
-    json data_file;
-
-    json raw_dump;
-    addr_byte_pairs insn_vec;
-    addr_byte_pairs acc_vec;
-    addr_byte_pairs uop_vec;
-    addr_byte_pairs wgt_vec;
-    addr_byte_pairs inp_vec;
-    addr_byte_pairs out_vec;
-    std::map<std::string, addr_byte_pairs*> byte_pairs = {
-        {"INSN", &insn_vec},
-        {"ACC", &acc_vec},
-        {"UOP", &uop_vec},
-        {"WGT", &wgt_vec},
-        {"INP", &inp_vec},
-        {"OUT", &out_vec}
-    };
-    std::string out_filename = filename + "_data.json";
-    std::ofstream out_file(out_filename);
-    data_file["data_dump"] = json::array({});
-    auto& data = data_file["data_dump"];
-    for (int i = 0; i < input_size; ++i) {
-        data.push_back({
-            {"idx", i},
-            {"name", "input_buffer"},
-            {"value", to_hex<uint8_t>(input_buf[i])}
-        });
-    }
-    for (int i = 0; i < weight_size; ++i) {
-        data.push_back(
-            {
-            {"idx", i},
-            {"name", "weight_buffer"},
-            {"value", to_hex<uint8_t>(weight_buf[i])}}
-        );
-    }
-    for (int i = 0; i < acc_size; ++i) {
-        data.push_back({
-            {"idx", i},
-            {"name", "bias_buffer"},
-            {"value", to_hex<uint32_t>(acc_buf[i])}}
-        );
-    }
-    for (int i = 0; i < uop_size; ++i) {
-        data.push_back({
-            {"idx", i},
-            {"name", "uop_buffer"},
-            {"value", to_hex<uint64_t>(*(reinterpret_cast<uint64_t*>(&uop_buf[i])))}}
-        );
-    }
-    out_file << std::setw(4) << data_file << "\n";
-    return out_filename;
-}
-
 std::string write_to_file(const std::string& filename, const json& data) {
   std::ofstream out_file(filename + "_prog_frag.json");
   out_file << std::setw(4) << data << "\n";
   return filename + "_prog_frag.json";
 }
 
-std::string compile_gemm(int batch, size_t n_inp_cols, size_t n_wgt_rows, std::string filename) {
+std::string CompileGEMM(int batch, size_t n_inp_cols, size_t n_wgt_rows, std::string filename) {
     size_t in_dim = n_inp_cols % VTA_BLOCK_IN != 0 ? n_inp_cols / VTA_BLOCK_IN + 1 : n_inp_cols / VTA_BLOCK_IN;
     size_t out_dim = n_wgt_rows % VTA_BLOCK_OUT != 0 ? n_wgt_rows / VTA_BLOCK_OUT + 1 : n_wgt_rows / VTA_BLOCK_OUT;
     size_t uop_size = batch * in_dim * out_dim;
@@ -235,7 +164,7 @@ std::string compile_gemm(int batch, size_t n_inp_cols, size_t n_wgt_rows, std::s
     return write_to_file(filename, prog_frag);
 }
 
-std::string compile_bias_add(int batch, size_t n_feat, std::string filename) {
+std::string CompilBiasAdd(int batch, size_t n_feat, std::string filename) {
   size_t in_dim = n_feat % VTA_BLOCK_IN != 0 ? n_feat / VTA_BLOCK_IN + 1 : n_feat / VTA_BLOCK_IN;
   size_t uop_size = batch * in_dim;
   json prog_frag = {
@@ -250,7 +179,7 @@ std::string compile_bias_add(int batch, size_t n_feat, std::string filename) {
   return write_to_file(filename, prog_frag);
 }
 
-std::string compile_relu(int batch, size_t n_feat, std::string filename) {
+std::string CompileRelu(int batch, size_t n_feat, std::string filename) {
   size_t in_dim = n_feat % VTA_BLOCK_IN != 0 ? n_feat / VTA_BLOCK_IN + 1 : n_feat / VTA_BLOCK_IN;
   size_t uop_size = batch * in_dim;
   json prog_frag = {
@@ -262,6 +191,16 @@ std::string compile_relu(int batch, size_t n_feat, std::string filename) {
   prog.push_back(getAluAsm(VTA_ALU_OPCODE_MAX, 0, uop_size, 1, 0));
   prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_STORE, VTA_MEM_ID_OUT, 0, 0, batch * in_dim, 1));
   return write_to_file(filename, prog_frag);
+}
+
+std::string GetCompiledFilename(const std::string op_name, const int* input_info, const int num_info) {
+  std::stringstream ss;
+  ss << op_name + "_";
+  for (int i = 0; i < num_info; ++i) {
+    ss << input_info[i] << "_";
+  }
+  ss << ".json";
+  return ss.str();
 }
 
 }

@@ -1,3 +1,5 @@
+#include <iomanip>
+#include <tvm/support/json.hpp>
 #include "ilavta_helpers.h"
 
 namespace tvm {
@@ -5,6 +7,9 @@ namespace runtime {
 namespace contrib {
 
 using namespace tvm::runtime;
+using namespace nlohmann;
+
+using addr_byte_pairs = std::vector<std::pair<vta_phy_addr_t, uint8_t>>;
 
 const int64_t SIM_DUMP = 1;
 const std::string RAW_DUMP = "vta_sim_dump.json";
@@ -208,6 +213,74 @@ VTAGenericInsn get2DLoadStoreInsn(int opcode, int type, int sram_offset, int dra
   insn.x_pad_1 = x_pad;
   converter.mem = insn;
   return converter.generic;
+}
+
+template <class T>
+std::string to_hex(T x) {
+    std::stringstream ss;
+    ss << "0x" << std::setfill('0')
+               << std::setw(sizeof(T) * 2)
+               << std::hex << static_cast<uint64_t>(x);
+    return ss.str();
+}
+
+std::string dump_datafile(uint8_t* input_buf, size_t input_size,
+                   uint8_t* weight_buf, size_t weight_size,
+                   uint32_t* acc_buf, size_t acc_size,
+                   VTAUop* uop_buf, size_t uop_size,
+                   std::string filename) {
+    json data_file;
+
+    json raw_dump;
+    addr_byte_pairs insn_vec;
+    addr_byte_pairs acc_vec;
+    addr_byte_pairs uop_vec;
+    addr_byte_pairs wgt_vec;
+    addr_byte_pairs inp_vec;
+    addr_byte_pairs out_vec;
+    std::map<std::string, addr_byte_pairs*> byte_pairs = {
+        {"INSN", &insn_vec},
+        {"ACC", &acc_vec},
+        {"UOP", &uop_vec},
+        {"WGT", &wgt_vec},
+        {"INP", &inp_vec},
+        {"OUT", &out_vec}
+    };
+    std::string out_filename = filename + "_data.json";
+    std::ofstream out_file(out_filename);
+    data_file["data_dump"] = json::array({});
+    auto& data = data_file["data_dump"];
+    for (int i = 0; i < input_size; ++i) {
+        data.push_back({
+            {"idx", i},
+            {"name", "input_buffer"},
+            {"value", to_hex<uint8_t>(input_buf[i])}
+        });
+    }
+    for (int i = 0; i < weight_size; ++i) {
+        data.push_back(
+            {
+            {"idx", i},
+            {"name", "weight_buffer"},
+            {"value", to_hex<uint8_t>(weight_buf[i])}}
+        );
+    }
+    for (int i = 0; i < acc_size; ++i) {
+        data.push_back({
+            {"idx", i},
+            {"name", "bias_buffer"},
+            {"value", to_hex<uint32_t>(acc_buf[i])}}
+        );
+    }
+    for (int i = 0; i < uop_size; ++i) {
+        data.push_back({
+            {"idx", i},
+            {"name", "uop_buffer"},
+            {"value", to_hex<uint64_t>(*(reinterpret_cast<uint64_t*>(&uop_buf[i])))}}
+        );
+    }
+    out_file << std::setw(4) << data_file << "\n";
+    return out_filename;
 }
 
 std::string runILASimulator(const std::string exp_name,

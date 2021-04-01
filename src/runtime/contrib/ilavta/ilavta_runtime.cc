@@ -35,7 +35,8 @@ class ILAVTARuntime : public JSONRuntimeBase {
     TVMArgs arg(values.data(), codes.data(), 5);
     dump_toggle_fn->CallPacked(arg, &rv);
 
-    auto op_name = nodes_[outputs_[0].id_].GetOpName();
+    auto call_node = nodes_[outputs_[0].id_];
+    auto op_name = call_node.GetOpName();
     if (op_name != "ilavta.dense" && op_name != "ilavta.bias_add" && op_name != "ilavta.relu") {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
@@ -69,25 +70,15 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int in_channels = in_dim * VTA_BLOCK_IN;
       int out_channels = out_dim * VTA_BLOCK_OUT;
 
-      int ptr = 0;
-      int num_instr = 64;
       int uop_size = batch / VTA_BATCH * in_channels / VTA_BLOCK_IN * out_channels / VTA_BLOCK_OUT;
-
-      int input_size = batch / VTA_BATCH * in_channels / VTA_BLOCK_IN;
-      int output_size = batch / VTA_BATCH * out_channels / VTA_BLOCK_OUT;
-      int wgt_size = in_channels / VTA_BLOCK_IN * out_channels / VTA_BLOCK_OUT;
 
       uint8_t* input = reinterpret_cast<uint8_t*>(input_node_data->data);
       uint8_t* weight = reinterpret_cast<uint8_t*>(wgt_node_data->data);
-
-      VTAGenericInsn *instrs = static_cast<VTAGenericInsn *>(VTAMemAlloc(sizeof(VTAGenericInsn) * num_instr, 0));
 
       uint8_t* input_buf = reinterpret_cast<uint8_t *>(VTAMemAlloc(sizeof(uint8_t) * batch * in_channels, 0));
       uint8_t* wgt_buf   = reinterpret_cast<uint8_t *>(VTAMemAlloc(sizeof(uint8_t) * out_channels * in_channels, 0));
       int32_t* acc_buf  = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * batch * out_channels, 0));
       VTAUop* uop_buf   = getGEMMUops(batch / VTA_BATCH, in_channels / VTA_BLOCK_IN, out_channels / VTA_BLOCK_OUT);
-      uint8_t* out_buf   = reinterpret_cast<uint8_t *>(VTAMemAlloc(sizeof(uint8_t) * out_channels * batch, 0));
-      VTADeviceHandle device = VTADeviceAlloc();
 
       for (int i = 0; i < batch; ++i) {
         for (int j = 0; j < in_channels; ++j) {
@@ -166,31 +157,9 @@ class ILAVTARuntime : public JSONRuntimeBase {
                     uop_buf, uop_size,
                     "ilavta_dense");
       
-      std::string ila_asm = compile_gemm(batch, n_inp_cols, n_wgt_rows, "ilavta_dense");
-
-      auto output_file = runILASimulator("ilavta_dense", ila_asm, data_file, false);
-      auto output_node_id = outputs_[0].id_;
-      auto output_data = data_entry_[output_node_id];
-
-      CHECK(output_data->ndim == 2) << "Output dimension error: " << "expected 2, actual " << output_data->ndim;
-
-      tvm::runtime::contrib::ila_output_data out_values;
-      auto buf_size = GetDataSize(*output_data);
-      uint8_t* buffer = new uint8_t[buf_size];
-      readILAOutput(output_file, out_values);
-      CHECK(out_values.size() == static_cast<size_t>(output_size * VTA_BLOCK_OUT)) << "Output element size mismatch: " << output_size * VTA_BLOCK_OUT << " v.s. " << buf_size;
-      
-      auto& out_shape = output_data->shape;
-      size_t out_h = out_shape[0];
-      size_t out_w = out_shape[1];
-
-      CHECK(out_h == static_cast<size_t>(n_inp_rows));
-      CHECK(out_w == static_cast<size_t>(n_wgt_rows)) << "Dimension mismatch: " << out_w << "; expected " << n_wgt_rows;
-
-      size_t bufsize_read = loadILAOutput(out_values, buffer, out_h, out_w);
-
-      CHECK(bufsize_read == buf_size) << "Number read differs from expected buffer size: " << bufsize_read << " v.s. " << buf_size;
-      memcpy(reinterpret_cast<uint8_t*>(output_data->data), buffer, sizeof(uint8_t) * buf_size);
+      std::string ila_asm = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
+      auto output_data = data_entry_[outputs_[0].id_];
+      runSimGetData("ilavta_dense", ila_asm, data_file, GetDataSize(*output_data), batch_size, n_wgt_rows, output_data->data);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.bias_add") {
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto bias_eid = EntryID(input_nodes_[1], 0);
@@ -212,8 +181,6 @@ class ILAVTARuntime : public JSONRuntimeBase {
       CHECK(n_inp_rows == output_data->shape[0]);
       CHECK(n_inp_cols == output_data->shape[1]);
 
-      const int num_instr = 64;
-
       int batch = n_inp_rows * VTA_BATCH;
       int in_feat = n_inp_cols % VTA_BLOCK_OUT == 0 ? n_inp_cols / VTA_BLOCK_OUT : n_inp_cols / VTA_BLOCK_IN + 1;
       int bias_feat = in_feat;
@@ -221,15 +188,10 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int bias_channels = bias_feat * VTA_BLOCK_OUT;
 
       int uop_size = batch / VTA_BATCH * in_feat;
-      int input_size = batch / VTA_BATCH * in_feat;
-      int output_size = input_size / 4;
-
-      VTAGenericInsn *instrs = static_cast<VTAGenericInsn *>(VTAMemAlloc(sizeof(VTAGenericInsn) * num_instr, 0));
 
       // int32_t* input_buf =  reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * batch * in_channels, 0));
       // TVM does array broadcasting over the matrix in bias_add
       // int32_t* bias_buf  = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * 1 * bias_channels, 0));
-      uint8_t* out_buf   = reinterpret_cast<uint8_t *>(VTAMemAlloc(sizeof(uint8_t) * batch * in_channels, 0));
       // VTADeviceHandle device = VTADeviceAlloc();
       uint32_t* combined_acc = reinterpret_cast<uint32_t*>(VTAMemAlloc(sizeof(uint32_t) * (bias_channels + batch * in_channels), 0));
       size_t acc_ptr = 0;
@@ -263,12 +225,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       VTAUop* uop_buf   = getBiasAddUops(batch / VTA_BATCH, in_channels / VTA_BLOCK_IN);
       
       std::string data_dump = dump_datafile(nullptr, 0, nullptr, 0, combined_acc, acc_ptr, uop_buf, uop_size, "ilavta_bias_add");
-      std::string ila_asm   = compile_bias_add(batch, n_inp_cols, "ilavta_bias_add");
-
-      // VTAMemFree(input_buf);
-      // VTAMemFree(bias_buf);
-      // VTAMemFree(out_buf);
-      // VTADeviceFree(device);
+      std::string ila_asm   = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
 
       runSimGetData("ilavta_bias_add", ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.relu") {
@@ -287,14 +244,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int in_channels = in_feat * VTA_BLOCK_OUT;
 
       int uop_size = batch / VTA_BATCH * in_feat;
-      int input_size = batch / VTA_BATCH * in_feat;
-      int sim_output_size = input_size;
-
-      int num_instrs = 64;
-      VTADeviceHandle device = VTADeviceAlloc();
-      VTAGenericInsn *instrs = static_cast<VTAGenericInsn *>(VTAMemAlloc(sizeof(VTAGenericInsn) * num_instrs, 0));
       uint32_t* input_buf = reinterpret_cast<uint32_t *>(VTAMemAlloc(sizeof(uint32_t) * batch * in_channels, 0));
-
       VTAUop *uop_buf = getReluUops(batch, in_feat);
 
       uint8_t* inputs = reinterpret_cast<uint8_t*>(input_data->data);
@@ -314,12 +264,10 @@ class ILAVTARuntime : public JSONRuntimeBase {
                                             input_buf, batch * in_channels,
                                             uop_buf, uop_size,
                                             "ilavta_relu");
-      std::string ila_asm = compile_relu(batch, n_inp_cols, "ilavta_relu");
+      std::string ila_asm   = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
 
       VTAMemFree(input_buf);
       VTAMemFree(uop_buf);
-      VTAMemFree(instrs);
-      VTADeviceFree(device);
 
       runSimGetData("ilavta_relu", ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data);
     }

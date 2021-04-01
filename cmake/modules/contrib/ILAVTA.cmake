@@ -7,7 +7,6 @@ if(USE_ILAVTA_CODEGEN STREQUAL "ON")
 
   file(GLOB ILAVTA_CONTRIB_SRC src/runtime/contrib/ilavta/ilavta_runtime.cc)
   list(APPEND ILAVTA_CONTRIB_SRC src/runtime/contrib/ilavta/ilavta_helpers.cc)
-  list(APPEND ILAVTA_CONTRIB_SRC src/runtime/contrib/ilavta/ilavta_codegen_utils.cc)
   file(GLOB VTA_RUNTIME_SRCS ${VTA_HW_PATH}/src/*.cc)
   list(APPEND VTA_RUNTIME_SRCS ${VTA_HW_PATH}/src/sim/sim_driver.cc)
   list(APPEND VTA_RUNTIME_SRCS ${VTA_HW_PATH}/src/sim/sim_tlpp.cc)

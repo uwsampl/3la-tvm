@@ -9,7 +9,9 @@
 #include <iostream>
 #include <numeric>
 #include <sstream>
+#include <set>
 
+#include "ilavta_codegen_utils.h"
 #include "../../utils.h"
 
 #include "../../../../runtime/contrib/json/json_node.h"
@@ -32,6 +34,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
   std::vector<JSONGraphNodeEntry> VisitExpr_(const CallNode* cn) override {
     Expr expr = GetRef<Expr>(cn);
     std::string name;
+    std::string filename;
 
     if (const auto* op_node = cn->op.as<OpNode>()) {
       name = op_node->name;
@@ -45,24 +48,36 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
       }
       if (name == "ilavta.dense") {
         LOG(INFO) << "ilavta.dense pattern";
-        // auto input_shape = GetShape(cn->args[0]->checked_type());
-        // auto weight_shape = GetShape(cn->args[1]->checked_type());
-        // int batch = input_shape[0];
-        // int n_inp_cols = input_shape[1];
-        // int n_wgt_rows = weight_shape[0];
-        // backend::contrib::compile_gemm(batch, n_inp_cols, n_wgt_rows, "./prog_frag/" + global_name);
+        auto input_shape = GetShape(cn->args[0]->checked_type());
+        auto weight_shape = GetShape(cn->args[1]->checked_type());
+        int batch = input_shape[0];
+        int n_inp_cols = input_shape[1];
+        int n_wgt_rows = weight_shape[0];
+        int info[] = {batch, n_inp_cols, n_wgt_rows};
+        filename = GetCompiledFilename("dense", info, 3);
+        if (this->compiled_func.find(filename) == this->compiled_func.end()) {
+          CompileGEMM(batch, n_inp_cols, n_wgt_rows, "./prog_frag/" + filename);
+        }
       }  else if (name == "ilavta.bias_add") {
         LOG(INFO) << "ilavta.bias_add pattern";
-        // auto input_shape = GetShape(cn->args[0]->checked_type());
-        // int batch = input_shape[0];
-        // int n_feat = input_shape[1];
-        // backend::contrib::compile_bias_add(batch, n_feat, "./prog_frag/" + global_name);
+        auto input_shape = GetShape(cn->args[0]->checked_type());
+        int batch = input_shape[0];
+        int n_feat = input_shape[1];
+        int info[] = {batch, n_feat};
+        filename = GetCompiledFilename("bias_add", info, 2);
+        if (this->compiled_func.find(filename) == this->compiled_func.end()) {
+          CompilBiasAdd(batch, n_feat, "./prog_frag/" + filename);
+        }
       } else if (name == "ilavta.relu") {
         LOG(INFO) << "ilavta.relu pattern";
-        // auto input_shape = GetShape(cn->args[0]->checked_type());
-        // int batch = input_shape[0];
-        // int n_feat = input_shape[1];
-        // backend::contrib::compile_relu(batch, n_feat, "./prog_frag/" + global_name);
+        auto input_shape = GetShape(cn->args[0]->checked_type());
+        int batch = input_shape[0];
+        int n_feat = input_shape[1];
+        int info[] = {batch, n_feat};
+        filename = GetCompiledFilename("relu", info, 2);
+        if (this->compiled_func.find(filename) == this->compiled_func.end()) {
+          CompileRelu(batch, n_feat, "./prog_frag/" + filename);
+        }
       }
     } else {
       LOG(FATAL) << "ILAVTA runtime does not support calls to "
@@ -78,8 +93,15 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
     auto node = std::make_shared<JSONGraphNode>(name,     /* name_ */
                                                 "kernel", /* op_type_ */
                                                 inputs, 1 /* num_outputs_ */);
+    std::vector<std::string> vec;
+    std::vector<dmlc::any> compiler_attr;
+    vec.push_back(filename);
+    compiler_attr.emplace_back(vec);
+    node->SetAttr("asm_file", compiler_attr);
     return AddNode(node, GetRef<Expr>(cn));
   }
+private:
+  std::set<std::string> compiled_func;
 
 };  // class ILAVTAJSONSerializer
 

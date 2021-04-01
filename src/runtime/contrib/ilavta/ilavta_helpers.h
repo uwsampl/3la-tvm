@@ -100,11 +100,6 @@ size_t loadILAOutput(const ila_output_data &out_values, uint8_t* buffer, size_t 
 void runSimGetData(std::string pattern_name, std::string ila_asm, std::string data_dump,
                    size_t output_size, int n_output_rows, int n_output_cols, void *output_data);
 
-// Compile to ILA ASM and return the path to the destination file
-std::string compile_gemm(int batch, size_t num_features, size_t num_hidden, std::string filename);
-std::string compile_bias_add(int batch, size_t num_features, std::string filename);
-std::string compile_relu(int batch, size_t num_features, std::string filename);
-
 // Create a data dump which could be used paired with an ILA ASM to produce
 // the ILA program fragment
 std::string dump_datafile(uint8_t* input_buf, size_t input_size,
