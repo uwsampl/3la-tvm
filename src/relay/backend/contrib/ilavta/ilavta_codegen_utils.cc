@@ -199,7 +199,6 @@ std::string GetCompiledFilename(const std::string op_name, const int* input_info
   for (int i = 0; i < num_info; ++i) {
     ss << input_info[i] << "_";
   }
-  ss << ".json";
   return ss.str();
 }
 

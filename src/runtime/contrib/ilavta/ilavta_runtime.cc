@@ -25,15 +25,15 @@ class ILAVTARuntime : public JSONRuntimeBase {
     CHECK(symbol_name_.substr(0, 6) == "ilavta");
     LOG(INFO) << "[Runtime] enter " << symbol_name_ << " runtime";
 
-    auto dump_toggle_fn = runtime::Registry::Get("vta.simulator.profiler_dump_mode");
-    CHECK(dump_toggle_fn != nullptr) << "Cannot get profiler_dump_mode toggle";
-    std::vector<TVMValue> values(10);
-    std::vector<int> codes(10);
-    runtime::TVMArgsSetter setter(values.data(), codes.data());
-    setter(0, 1L);
-    TVMRetValue rv;
-    TVMArgs arg(values.data(), codes.data(), 5);
-    dump_toggle_fn->CallPacked(arg, &rv);
+    // auto dump_toggle_fn = runtime::Registry::Get("vta.simulator.profiler_dump_mode");
+    // CHECK(dump_toggle_fn != nullptr) << "Cannot get profiler_dump_mode toggle";
+    // std::vector<TVMValue> values(10);
+    // std::vector<int> codes(10);
+    // runtime::TVMArgsSetter setter(values.data(), codes.data());
+    // setter(0, 1L);
+    // TVMRetValue rv;
+    // TVMArgs arg(values.data(), codes.data(), 5);
+    // dump_toggle_fn->CallPacked(arg, &rv);
 
     auto call_node = nodes_[outputs_[0].id_];
     auto op_name = call_node.GetOpName();

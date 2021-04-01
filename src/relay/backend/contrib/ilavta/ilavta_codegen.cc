@@ -56,7 +56,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
         int info[] = {batch, n_inp_cols, n_wgt_rows};
         filename = GetCompiledFilename("dense", info, 3);
         if (this->compiled_func.find(filename) == this->compiled_func.end()) {
-          CompileGEMM(batch, n_inp_cols, n_wgt_rows, "./prog_frag/" + filename);
+          filename = CompileGEMM(batch, n_inp_cols, n_wgt_rows, "./prog_frag/" + filename);
         }
       }  else if (name == "ilavta.bias_add") {
         LOG(INFO) << "ilavta.bias_add pattern";
@@ -66,7 +66,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
         int info[] = {batch, n_feat};
         filename = GetCompiledFilename("bias_add", info, 2);
         if (this->compiled_func.find(filename) == this->compiled_func.end()) {
-          CompilBiasAdd(batch, n_feat, "./prog_frag/" + filename);
+          filename = CompilBiasAdd(batch, n_feat, "./prog_frag/" + filename);
         }
       } else if (name == "ilavta.relu") {
         LOG(INFO) << "ilavta.relu pattern";
@@ -76,7 +76,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
         int info[] = {batch, n_feat};
         filename = GetCompiledFilename("relu", info, 2);
         if (this->compiled_func.find(filename) == this->compiled_func.end()) {
-          CompileRelu(batch, n_feat, "./prog_frag/" + filename);
+          filename = CompileRelu(batch, n_feat, "./prog_frag/" + filename);
         }
       }
     } else {
