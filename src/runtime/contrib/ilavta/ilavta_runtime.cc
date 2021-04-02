@@ -1,3 +1,4 @@
+#include <tvm/runtime/data_type.h>
 #include "ilavta_helpers.h"
 #include "../json/json_node.h"
 #include "../json/json_runtime.h"
@@ -160,7 +161,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       std::string ila_asm = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
       auto output_data = data_entry_[outputs_[0].id_];
       auto output_node = nodes_[outputs_[0].id_];
-      auto dtype       = output_node.GetAttr<std::string>("dtype");
+      auto dtype       = DLDataType2String(output_data->dtype);
       runSimGetData("ilavta_dense", ila_asm, data_file, GetDataSize(*output_data), batch_size, n_wgt_rows, output_data->data, dtype);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.bias_add") {
       auto input_eid = EntryID(input_nodes_[0], 0);
@@ -228,7 +229,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       
       std::string data_dump = dump_datafile(nullptr, 0, nullptr, 0, combined_acc, acc_ptr, uop_buf, uop_size, "ilavta_bias_add");
       std::string ila_asm   = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
-      auto dtype            = nodes_[output_eid].GetAttr<std::string>("dtype");
+      auto dtype            = DLDataType2String(output_data->dtype);
 
       runSimGetData("ilavta_bias_add", ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data, dtype);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.relu") {
@@ -268,7 +269,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
                                             uop_buf, uop_size,
                                             "ilavta_relu");
       std::string ila_asm   = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
-      auto dtype            = nodes_[output_eid].GetAttr<std::string>("dtype");
+      auto dtype            = DLDataType2String(output_data->dtype);
 
       VTAMemFree(input_buf);
       VTAMemFree(uop_buf);
