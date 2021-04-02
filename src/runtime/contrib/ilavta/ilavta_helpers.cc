@@ -347,8 +347,16 @@ size_t loadILAOutput(const ila_output_data &out_values, uint8_t* buffer, size_t 
   return buf_cur;
 }
 
+template<class T>
+void copy_data(uint8_t* from_, T out_data, size_t size) {
+  for (size_t i = 0; i < size; ++i) {
+    out_data[i] = from_[i];
+  }
+}
+
 void runSimGetData(std::string pattern_name, std::string ila_asm, std::string data_dump,
-                  size_t output_size, int n_output_rows, int n_output_cols, void *output_data) {
+                  size_t output_size, int n_output_rows, int n_output_cols, void *output_data,
+                  std::string output_dtype) {
   std::string output_file = runILASimulator(pattern_name, ila_asm, data_dump, false);
 
   ila_output_data out_data;
@@ -358,9 +366,16 @@ void runSimGetData(std::string pattern_name, std::string ila_asm, std::string da
 
   auto buf_read = loadILAOutput(out_data, buffer, n_output_rows, n_output_cols);
   // CHECK(buf_read == output_size) << "Output size mismatch: " << buf_read << " v.s. " << output_size;
-  uint8_t* o_data = reinterpret_cast<uint8_t*>(output_data);
-  for (size_t i = 0; i < buf_read; ++i) {
-    o_data[i] = buffer[i];
+  if (output_dtype == "int32") {
+    copy_data<int32_t*>(buffer, reinterpret_cast<int32_t*>(output_data), buf_read);
+  } else if (output_dtype == "int8") {
+    copy_data<int8_t*>(buffer, reinterpret_cast<int8_t*>(output_data), buf_read);
+  } else if (output_dtype == "uint8") {
+    copy_data<uint8_t*>(buffer, reinterpret_cast<uint8_t*>(output_data), buf_read);
+  } else if (output_dtype == "uint32") {
+    copy_data<uint32_t*>(buffer, reinterpret_cast<uint32_t*>(output_data), buf_read);
+  } else {
+    LOG(FATAL) << "Unrecognized output data type: " << output_dtype;
   }
 }
 
