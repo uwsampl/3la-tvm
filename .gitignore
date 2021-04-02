@@ -233,3 +233,5 @@ conda/pkg
 # nix files
 .envrc
 *.nix
+
+tests/python/byo3la/*.params
