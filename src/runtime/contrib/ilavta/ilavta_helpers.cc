@@ -1,3 +1,5 @@
+#include <iomanip>
+#include <tvm/support/json.hpp>
 #include "ilavta_helpers.h"
 
 namespace tvm {
@@ -5,6 +7,9 @@ namespace runtime {
 namespace contrib {
 
 using namespace tvm::runtime;
+using namespace nlohmann;
+
+using addr_byte_pairs = std::vector<std::pair<vta_phy_addr_t, uint8_t>>;
 
 const int64_t SIM_DUMP = 1;
 const std::string RAW_DUMP = "vta_sim_dump.json";
@@ -210,17 +215,93 @@ VTAGenericInsn get2DLoadStoreInsn(int opcode, int type, int sram_offset, int dra
   return converter.generic;
 }
 
-std::string runILASimulator(const std::string exp_name) {
+template <class T>
+std::string to_hex(T x) {
+    std::stringstream ss;
+    ss << "0x" << std::setfill('0')
+               << std::setw(sizeof(T) * 2)
+               << std::hex << static_cast<uint64_t>(x);
+    return ss.str();
+}
+
+std::string dump_datafile(uint8_t* input_buf, size_t input_size,
+                   uint8_t* weight_buf, size_t weight_size,
+                   uint32_t* acc_buf, size_t acc_size,
+                   VTAUop* uop_buf, size_t uop_size,
+                   std::string filename) {
+    json data_file;
+
+    json raw_dump;
+    addr_byte_pairs insn_vec;
+    addr_byte_pairs acc_vec;
+    addr_byte_pairs uop_vec;
+    addr_byte_pairs wgt_vec;
+    addr_byte_pairs inp_vec;
+    addr_byte_pairs out_vec;
+    std::map<std::string, addr_byte_pairs*> byte_pairs = {
+        {"INSN", &insn_vec},
+        {"ACC", &acc_vec},
+        {"UOP", &uop_vec},
+        {"WGT", &wgt_vec},
+        {"INP", &inp_vec},
+        {"OUT", &out_vec}
+    };
+    std::string out_filename = filename + "_data.json";
+    std::ofstream out_file(out_filename);
+    data_file["data_dump"] = json::array({});
+    auto& data = data_file["data_dump"];
+    for (int i = 0; i < input_size; ++i) {
+        data.push_back({
+            {"idx", i},
+            {"name", "input_buffer"},
+            {"value", to_hex<uint8_t>(input_buf[i])}
+        });
+    }
+    for (int i = 0; i < weight_size; ++i) {
+        data.push_back(
+            {
+            {"idx", i},
+            {"name", "weight_buffer"},
+            {"value", to_hex<uint8_t>(weight_buf[i])}}
+        );
+    }
+    for (int i = 0; i < acc_size; ++i) {
+        data.push_back({
+            {"idx", i},
+            {"name", "bias_buffer"},
+            {"value", to_hex<uint32_t>(acc_buf[i])}}
+        );
+    }
+    for (int i = 0; i < uop_size; ++i) {
+        data.push_back({
+            {"idx", i},
+            {"name", "uop_buffer"},
+            {"value", to_hex<uint64_t>(*(reinterpret_cast<uint64_t*>(&uop_buf[i])))}}
+        );
+    }
+    out_file << std::setw(4) << data_file << "\n";
+    return out_filename;
+}
+
+std::string runILASimulator(const std::string exp_name,
+                            const std::string ila_asm,
+                            const std::string data_dump, bool use_trace) {
   // Check dump file
   std::string input_filename = exp_name + "_input.json";
   std::string output_filename = exp_name + "_out.json";
-  auto ret = std::system("stat vta_sim_dump.json > /dev/null 2> /dev/null");
-  CHECK(ret == 0) << "vta_sim_dump.json does not exists";
+  if (use_trace) {
+    auto ret = std::system("stat vta_sim_dump.json > /dev/null 2> /dev/null");
+    CHECK(ret == 0) << "vta_sim_dump.json does not exists";
 
-  ret = std::system(("python3 produce_ila_fragment.py vta_sim_dump.json ./prog_frag/" + input_filename).c_str());
-  CHECK(ret == 0) << "Failed to produce program fragment";
-  
-  ret = std::system(("vta_ila_sim " + exp_name).c_str());
+    ret = std::system(("python3 produce_ila_fragment.py vta_sim_dump.json ./prog_frag/" + input_filename).c_str());
+    CHECK(ret == 0) << "Failed to produce program fragment";
+  } else {
+    CHECK(std::system(("python3 produce_prog_frag.py "
+                      + ila_asm + " "
+                      + data_dump + " "
+                      + "./prog_frag/" + input_filename).c_str()) == 0) << "Failed to convert to program fragment";
+  }
+  int ret = std::system(("vta_ila_sim " + exp_name).c_str());
   CHECK(ret == 0) << "Failed to run ILA simulator";
 
   ret = std::system(("stat ./result/" + output_filename + " > /dev/null 2> /dev/null").c_str());
@@ -245,7 +326,7 @@ void readILAOutput(const std::string filename, ila_output_data &out_values) {
   }
 }
 
-size_t loadILAOutput(const ila_output_data &out_values, int8_t* buffer, size_t out_h, size_t out_w) {
+size_t loadILAOutput(const ila_output_data &out_values, uint8_t* buffer, size_t out_h, size_t out_w) {
   LOG(INFO) << "[Runtime] Copying from output json to byte buffer"; 
 
   size_t data_cur = 0;
@@ -260,25 +341,41 @@ size_t loadILAOutput(const ila_output_data &out_values, int8_t* buffer, size_t o
       std::stringstream ss;
       ss << std::hex << val;
       ss >> temp;
-      buffer[buf_cur++] = static_cast<int8_t>(temp);
+      buffer[buf_cur++] = static_cast<uint8_t>(temp);
     }
   }
   return buf_cur;
 }
 
-void runSimGetData(std::string pattern_name, size_t output_size, int n_output_rows, int n_output_cols, void *output_data) {
-  std::string output_file = runILASimulator(pattern_name);
+template<class T>
+void copy_data(uint8_t* from_, T out_data, size_t size) {
+  for (size_t i = 0; i < size; ++i) {
+    out_data[i] = from_[i];
+  }
+}
+
+void runSimGetData(std::string pattern_name, std::string ila_asm, std::string data_dump,
+                  size_t output_size, int n_output_rows, int n_output_cols, void *output_data,
+                  std::string output_dtype) {
+  std::string output_file = runILASimulator(pattern_name, ila_asm, data_dump, false);
 
   ila_output_data out_data;
   readILAOutput(output_file, out_data);
 
-  int8_t* buffer = new int8_t[output_size];
+  uint8_t* buffer = new uint8_t[output_size];
 
   auto buf_read = loadILAOutput(out_data, buffer, n_output_rows, n_output_cols);
-  CHECK(buf_read == output_size) << "Output size mismatch: " << buf_read << " v.s. " << output_size;
-  int8_t* o_data = reinterpret_cast<int8_t*>(output_data);
-  for (size_t i = 0; i < buf_read; ++i) {
-    o_data[i] = buffer[i];
+  // CHECK(buf_read == output_size) << "Output size mismatch: " << buf_read << " v.s. " << output_size;
+  if (output_dtype == "int32") {
+    copy_data<int32_t*>(buffer, reinterpret_cast<int32_t*>(output_data), buf_read);
+  } else if (output_dtype == "int8") {
+    copy_data<int8_t*>(buffer, reinterpret_cast<int8_t*>(output_data), buf_read);
+  } else if (output_dtype == "uint8") {
+    copy_data<uint8_t*>(buffer, reinterpret_cast<uint8_t*>(output_data), buf_read);
+  } else if (output_dtype == "uint32") {
+    copy_data<uint32_t*>(buffer, reinterpret_cast<uint32_t*>(output_data), buf_read);
+  } else {
+    LOG(FATAL) << "Unrecognized output data type: " << output_dtype;
   }
 }
 
