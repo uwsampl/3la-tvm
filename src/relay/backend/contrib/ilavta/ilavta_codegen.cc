@@ -38,15 +38,31 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
 
     if (const auto* op_node = cn->op.as<OpNode>()) {
       name = op_node->name;
+      LOG(INFO) << "Annotated Operator: " << name;
+      if (name != "qnn.dense") {
+        LOG(FATAL) << "Unrecognized operator: " << name; 
+      }
+      if (name == "qnn.dense") {
+        auto input_shape = GetShape(cn->args[0]->checked_type());
+        auto weight_shape = GetShape(cn->args[1]->checked_type());
+        int batch = input_shape[0];
+        int n_inp_cols = input_shape[1];
+        int n_wgt_rows = weight_shape[0];
+        int info[] = {batch, n_inp_cols, n_wgt_rows};
+        filename = GetCompiledFilename("qnn_dense", info, 3);
+        if (this->compiled_func.find(filename) == this->compiled_func.end()) {
+          filename = CompileGEMM(batch, n_inp_cols, n_wgt_rows, "./prog_frag/" + filename);
+        }
+      } 
     } else if (const auto* fn = cn->op.as<FunctionNode>()) {
       auto comp = fn->GetAttr<String>(attr::kComposite);
       CHECK(comp.defined())
           << "JSON runtime only supports composite functions.";
       name = comp.value();
-      if (!(name == "ilavta.conv2d" || name == "ilavta.bias_add" || name == "ilavta.dense" || name == "ilavta.relu")) {
+      if (!(name == "ilavta.conv2d" || name == "ilavta.bias_add" || name == "ilavta.qnn_dense" || name == "ilavta.dense" || name == "ilavta.relu")) {
         LOG(FATAL) << "Unrecognized pattern: " << name;
       }
-      if (name == "ilavta.dense") {
+      if (name == "ilavta.dense" || name == "ilavta.qnn_dense") {
         LOG(INFO) << "ilavta.dense pattern";
         auto input_shape = GetShape(cn->args[0]->checked_type());
         auto weight_shape = GetShape(cn->args[1]->checked_type());
@@ -54,7 +70,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
         int n_inp_cols = input_shape[1];
         int n_wgt_rows = weight_shape[0];
         int info[] = {batch, n_inp_cols, n_wgt_rows};
-        filename = GetCompiledFilename("dense", info, 3);
+        filename = GetCompiledFilename(name, info, 3);
         if (this->compiled_func.find(filename) == this->compiled_func.end()) {
           filename = CompileGEMM(batch, n_inp_cols, n_wgt_rows, "./prog_frag/" + filename);
         }

@@ -26,7 +26,8 @@ def _register_external_op_helper(op_name, supported=True):
 # _register_external_op_helper("nn.batch_matmul")
 _register_external_op_helper("nn.bias_add")
 _register_external_op_helper("nn.dense")
-# _register_external_op_helper("nn.relu")
+_register_external_op_helper("qnn.dense")
+_register_external_op_helper("nn.relu")
 
 
 def make_pattern_conv2d():
@@ -55,6 +56,12 @@ def make_pattern_relu():
     data = wildcard()
     return is_op('nn.relu')(data)
 
+def make_pattern_qnn_dense():
+    inp = wildcard()
+    wgt = wildcard()
+    inp_scale, inp_zp, wgt_scale, wgt_zp, nbits, out_dtype = [wildcard() for _ in range(6)]
+    return is_op('qnn.dense')(inp, wgt, inp_scale, inp_zp, wgt_scale, wgt_zp, nbits, out_dtype)
+
 @register_pattern_table("ilavta")
 def pattern_table():
     # conv2d_pat = ("ilavta.conv2d", make_pattern_conv2d())
@@ -62,5 +69,6 @@ def pattern_table():
     dense_pat  = ("ilavta.dense", make_pattern_dense())  
     bias_add_pat = ("ilavta.bias_add", make_pattern_bias_add())
     relu_pat = ("ilavta.relu", make_pattern_relu())
-    ilavta_patterns = [matmul_pat, dense_pat, bias_add_pat, relu_pat]
+    qnn_dense_pat = ("ilavta.qnn_dense", make_pattern_qnn_dense())
+    ilavta_patterns = [matmul_pat, dense_pat, bias_add_pat, relu_pat, qnn_dense_pat]
     return ilavta_patterns

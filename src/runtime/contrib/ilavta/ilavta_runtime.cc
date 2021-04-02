@@ -19,7 +19,8 @@ class ILAVTARuntime : public JSONRuntimeBase {
   const char* type_key() const { return "ilavta"; }  // namespace contrib
 
   void Init(const Array<NDArray>& consts) override {
-    CHECK(consts.size() == 0) << "matmul should have no consts";
+    // disable the check for qnn.dense (contains scaling factor, zero points etc.)
+    // CHECK(consts.size() == 0) << "matmul should have no consts";
   }
 
   void Run() override {
@@ -38,11 +39,11 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
     auto call_node = nodes_[outputs_[0].id_];
     auto op_name = call_node.GetOpName();
-    if (op_name != "ilavta.dense" && op_name != "ilavta.bias_add" && op_name != "ilavta.relu") {
-      LOG(FATAL) << "Unknown pattern " << symbol_name_;
+    if (op_name != "ilavta.dense" && op_name != "qnn.dense" && op_name != "ilavta.bias_add" && op_name != "ilavta.relu") {
+      LOG(FATAL) << "Unknown pattern " << symbol_name_ << " " << op_name;
     }
 
-    if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.dense") {
+    if (outputs_.size() == 1 && (nodes_[outputs_[0].id_].GetOpName() == "ilavta.dense" || nodes_[outputs_[0].id_].GetOpName() == "qnn.dense")) {
       LOG(INFO) << "[Runtime] off-loading ilavta.dense";
       // assume there're only two inputs for now
       auto input_eid = EntryID(input_nodes_[0], 0);
