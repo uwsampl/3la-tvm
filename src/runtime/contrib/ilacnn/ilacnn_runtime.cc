@@ -54,6 +54,17 @@ class IlaCNNRuntime : public JSONRuntimeBase {
                 << data_info->shape[2] << ", "
                 << data_info->shape[3]
                 << ")" << std::endl;
+      if (data_info->shape[0] > 1) {
+        LOG(FATAL) << "HLSCNN conv only support batch num 1 for now";
+        return;
+      }
+      auto inp_data_size = GetDataSize(*data_info)/sizeof(float);
+      CHECK(inp_data_size == data_info->shape[1] * data_info->shape[2] * data_info->shape[3]);
+      float* inp_data_ptr = new float[inp_data_size];
+      std::copy(reinterpret_cast<float*>(data_info->data),
+                reinterpret_cast<float*>(data_info->data) + inp_data_size,
+                inp_data_ptr);
+      dump_data(inp_data_ptr, inp_data_size, "./data/inp.txt");
 
       // weight
       auto eid_weight = EntryID(input_nodes_[1], 0);
@@ -65,6 +76,14 @@ class IlaCNNRuntime : public JSONRuntimeBase {
                 << weight_info->shape[2] << ", "
                 << weight_info->shape[3]
                 << ")" << std::endl;
+      auto wgt_data_size = GetDataSize(*weight_info)/sizeof(float);
+      CHECK(wgt_data_size == weight_info->shape[0] * weight_info->shape[1] *
+                             weight_info->shape[2] * weight_info->shape[3]);
+      float* wgt_data_ptr = new float[wgt_data_size];
+      std::copy(reinterpret_cast<float*>(weight_info->data),
+                reinterpret_cast<float*>(weight_info->data) + wgt_data_size,
+                wgt_data_ptr);
+      dump_data(wgt_data_ptr, wgt_data_size, "./data/wgt.txt");
 
       // output
       auto eid_o = outputs_[0].id_;
@@ -98,6 +117,21 @@ class IlaCNNRuntime : public JSONRuntimeBase {
       std::cout << "Kernel layout: " << kernel_layout[0] << std::endl;
 
       // TODO: Instantiate and call driver
+      std::string driver_dir = getenv("PY_3LA_DRIVER");
+      driver_dir += "/hlscnn";
+      std::stringstream call_builder;
+      call_builder << "python3 " << driver_dir << "/conv_layer_driver.py "
+        << "--in_size " << data_info->shape[1] << " " << data_info->shape[2] << " " << data_info->shape[3] << " "
+        << "--out_size " << out_info->shape[1] << " " << out_info->shape[2] << " " << out_info->shape[3] << " "
+        << "--kernel_size " << weight_info->shape[0] << " " << weight_info->shape[1] << " "
+                            << weight_info->shape[2] << " " << weight_info->shape[3] << " "
+        << "--stride " << strides[0] << " " << strides[1];
+      std::string call_cmd = call_builder.str();
+
+      LOG(INFO) << "calling hlscnn driver\n" << "command: " << call_cmd;
+      auto res = std::system(call_cmd.c_str());
+      CHECK(res == 0) << "Error executing simulator " << call_cmd;
+
     } else {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
