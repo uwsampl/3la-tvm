@@ -3,6 +3,7 @@
 #include <tvm/runtime/container.h>
 #include <tvm/runtime/ndarray.h>
 #include <tvm/runtime/registry.h>
+#include <tvm/support/json.hpp>
 #include <tvm/tir/op.h>
 
 #include <cstddef>
@@ -13,6 +14,7 @@
 #include <iomanip>
 #include <fstream>
 #include <sstream>
+#include <chrono>
 
 #include "../json/json_node.h"
 #include "../json/json_runtime.h"
@@ -39,6 +41,11 @@ class IlaCNNRuntime : public JSONRuntimeBase {
   void Run() override {
     CHECK(symbol_name_.substr(0, 6) == "ilacnn") << symbol_name_;
     LOG(INFO) << "[Runtime] entering " << symbol_name_ << " runtime";
+
+    const std::string wall_clock_file = "ilacnn_wallclock.json";
+    auto op_name = nodes_[outputs_[0].id_].GetOpName();
+    std::chrono::_V2::system_clock::time_point start_time;
+    std::chrono::_V2::system_clock::time_point end_time;
 
     if (outputs_.size() == 1 && input_nodes_.size() == 2 &&
         nodes_[outputs_[0].id_].GetOpName() == "ilacnn.conv2d") {
@@ -135,7 +142,9 @@ class IlaCNNRuntime : public JSONRuntimeBase {
 
 
       LOG(INFO) << "calling hlscnn driver\n" << "command: " << call_cmd;
+      start_time = std::chrono::high_resolution_clock::now();
       auto res = std::system(call_cmd.c_str());
+      end_time = std::chrono::high_resolution_clock::now();
       CHECK(res == 0) << "Error executing simulator " << call_cmd;
 
       // retrieve the results
@@ -150,6 +159,17 @@ class IlaCNNRuntime : public JSONRuntimeBase {
     } else {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
+    std::ifstream fin(wall_clock_file);
+    nlohmann::json wall_clock_data;
+    fin >> wall_clock_data;
+    if (wall_clock_data.find(op_name) == wall_clock_data.end()) {
+      wall_clock_data[op_name] = nlohmann::json::array({});
+    }
+    wall_clock_data[op_name].push_back(
+      std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count()
+    );
+    std::ofstream fout(wall_clock_data);
+    fout << wall_clock_data;
     LOG(INFO) << "[Runtime] exit " << symbol_name_ << " runtime, resume host";
   }
 
