@@ -10,6 +10,7 @@
 #include <numeric>
 #include <sstream>
 #include <set>
+#include <chrono>
 
 #include "ilavta_codegen_utils.h"
 #include "../../utils.h"
@@ -106,6 +107,9 @@ private:
 };  // class ILAVTAJSONSerializer
 
 runtime::Module ILAVTACompiler(const ObjectRef& ref) {
+  LOG(INFO) << "Begin ILAVTA Codegen";
+  const std::string wall_clock_file = "./ilavta_compile_time.json";
+  auto start_time = std::chrono::high_resolution_clock::now();
   CHECK(ref->IsInstance<FunctionNode>());
   auto func = Downcast<Function>(ref);
   auto func_name = GetExtSymbol(func);
@@ -119,6 +123,8 @@ runtime::Module ILAVTACompiler(const ObjectRef& ref) {
   CHECK(pf != nullptr) << "Cannot find ILAVTA runtime module to create";
   auto mod = (*pf)(func_name, graph_json, params);
   LOG(INFO) << "Module created";
+  auto end_time = std::chrono::high_resolution_clock::now();
+  record_compile_time(end_time - start_time, wall_clock_file);
   return mod;
 }
 
