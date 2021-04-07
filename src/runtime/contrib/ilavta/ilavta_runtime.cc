@@ -2,6 +2,7 @@
 #include <tvm/support/json.hpp>
 
 #include <chrono>
+#include <iostream>
 
 #include "ilavta_helpers.h"
 #include "../json/json_node.h"
@@ -283,14 +284,15 @@ class ILAVTARuntime : public JSONRuntimeBase {
       sim_time = runSimGetData("ilavta_relu", ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data, dtype);
     }
     std::ifstream fin(wall_clock_file);
-    nlohmann::json wall_clock_data;
-    fin >> wall_clock_data;
+    nlohmann::json wall_clock_data = nlohmann::json::parse(fin);
+    fin.close();
     if (wall_clock_data.find(op_name) == wall_clock_data.end()) {
-      wall_clock_data[op_name] = nlohmann::json::array({});
+      wall_clock_data[op_name] = nlohmann::json::array();
     }
     wall_clock_data[op_name].push_back(sim_time);
-    std::ofstream fout(wall_clock_data);
+    std::ofstream fout(wall_clock_file);
     fout << wall_clock_data;
+    fout.close();
   }
 
  protected:

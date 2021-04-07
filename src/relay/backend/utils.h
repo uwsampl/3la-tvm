@@ -39,6 +39,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <sstream>
 
 namespace tvm {
 namespace relay {
@@ -306,8 +307,15 @@ inline bool IsAutoSchedulerEnabled() {
 
 inline void record_compile_time(std::chrono::duration<int64_t, std::nano> time_recorded, std::string filename) {
   std::ifstream fin(filename);
+  std::stringstream ss;
+  ss << fin.rdbuf();
   nlohmann::json wall_clock_data;
-  fin >> wall_clock_data;
+  auto content = ss.str();
+  if (content.size() != 0) {
+    wall_clock_data = nlohmann::json::parse(content);
+  } else {
+    wall_clock_data = nlohmann::json::object({});
+  }
   if (wall_clock_data.find("compile_time") == wall_clock_data.end()) {
     wall_clock_data["compile_time"] = nlohmann::json::array({});
   }
