@@ -88,6 +88,7 @@ class IlaCNNRuntime : public JSONRuntimeBase {
       // output
       auto eid_o = outputs_[0].id_;
       auto out_info = data_entry_[eid_o];
+      // auto out_info = data_entry_[EntryID(outputs_[0])];
       CHECK(out_info->ndim == 4);
       std::cout << "Output shape: ("
                 << out_info->shape[0] << ", "
@@ -95,7 +96,11 @@ class IlaCNNRuntime : public JSONRuntimeBase {
                 << out_info->shape[2] << ", "
                 << out_info->shape[3]
                 << ")" << std::endl;
-
+      auto o_data_size = GetDataSize(*out_info)/sizeof(float);
+      CHECK(o_data_size == out_info->shape[0] * out_info->shape[1] * 
+                           out_info->shape[2] * out_info->shape[3]);
+      float* o_data_ptr = new float[o_data_size];
+      
       // attributes
       auto strides = call_node.GetAttr<std::vector<std::string>>("strides");
       auto padding = call_node.GetAttr<std::vector<std::string>>("padding");
@@ -128,9 +133,19 @@ class IlaCNNRuntime : public JSONRuntimeBase {
         << "--stride " << strides[0] << " " << strides[1];
       std::string call_cmd = call_builder.str();
 
+
       LOG(INFO) << "calling hlscnn driver\n" << "command: " << call_cmd;
       auto res = std::system(call_cmd.c_str());
       CHECK(res == 0) << "Error executing simulator " << call_cmd;
+
+      // retrieve the results
+      retrieve_result(o_data_ptr, o_data_size, "./data/conv_result.txt");
+      std::copy(o_data_ptr, o_data_ptr + o_data_size,
+                reinterpret_cast<float*>(out_info->data));
+                
+      free(inp_data_ptr);
+      free(wgt_data_ptr);
+      free(o_data_ptr);
 
     } else {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
