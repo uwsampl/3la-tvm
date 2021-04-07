@@ -297,14 +297,16 @@ class ILAFlexRuntime : public JSONRuntimeBase {
     std::ifstream fin(wall_clock_file);
     nlohmann::json wall_clock_data;
     fin >> wall_clock_data;
+    fin.close();
     if (wall_clock_data.find(op_name) == wall_clock_data.end()) {
       wall_clock_data[op_name] = nlohmann::json::array({});
     }
     wall_clock_data[op_name].push_back(
       std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count()
     );
-    std::ofstream fout(wall_clock_data);
+    std::ofstream fout(wall_clock_file);
     fout << wall_clock_data;
+    fout.close();
     LOG(INFO) << "[Runtime] exit " << symbol_name_ << " runtime, resume host";
   }
 
