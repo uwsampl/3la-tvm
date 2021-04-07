@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 #include <fstream>
-
+#include <chrono>
 
 namespace tvm {
 namespace runtime {
@@ -96,8 +96,9 @@ size_t loadILAOutput(const ila_output_data &out_values, uint8_t* buffer, size_t 
 
 // Run `pattern_name` on ILA simulator and then copy back
 // data produced by the ILA simulator and store into `output_data`
+// returns time spent on running the simulator
 // This is the interface provided to users
-void runSimGetData(std::string pattern_name, std::string ila_asm, std::string data_dump,
+int64_t runSimGetData(std::string pattern_name, std::string ila_asm, std::string data_dump,
                    size_t output_size, int n_output_rows, int n_output_cols, void *output_data, std::string output_dtype);
 
 // Create a data dump which could be used paired with an ILA ASM to produce

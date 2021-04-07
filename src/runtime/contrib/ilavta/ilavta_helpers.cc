@@ -354,10 +354,12 @@ void copy_data(uint8_t* from_, T out_data, size_t size) {
   }
 }
 
-void runSimGetData(std::string pattern_name, std::string ila_asm, std::string data_dump,
+int64_t runSimGetData(std::string pattern_name, std::string ila_asm, std::string data_dump,
                   size_t output_size, int n_output_rows, int n_output_cols, void *output_data,
                   std::string output_dtype) {
+  auto start_time = std::chrono::high_resolution_clock::now();
   std::string output_file = runILASimulator(pattern_name, ila_asm, data_dump, false);
+  auto end_time = std::chrono::high_resolution_clock::now();
 
   ila_output_data out_data;
   readILAOutput(output_file, out_data);
@@ -377,6 +379,7 @@ void runSimGetData(std::string pattern_name, std::string ila_asm, std::string da
   } else {
     LOG(FATAL) << "Unrecognized output data type: " << output_dtype;
   }
+  return std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 }
 
 }

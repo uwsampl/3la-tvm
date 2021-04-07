@@ -65,7 +65,7 @@ class ILAFlexJSONSerializer : public backend::contrib::JSONSerializer {
 
 runtime::Module ILAFlexCompiler(const ObjectRef& ref) {
   LOG(INFO) << "Begin FlexASR Codegen";
-  const std::string wall_clock_file = "./ilaflex_compile_time.json";
+  const std::string wall_clock_file = "./ilaflex_wallclock.json";
   auto start_time = std::chrono::high_resolution_clock::now();
   CHECK(ref->IsInstance<FunctionNode>());
 
