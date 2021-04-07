@@ -1,4 +1,8 @@
 #include <tvm/runtime/data_type.h>
+#include <tvm/support/json.hpp>
+
+#include <chrono>
+
 #include "ilavta_helpers.h"
 #include "../json/json_node.h"
 #include "../json/json_runtime.h"
@@ -36,8 +40,10 @@ class ILAVTARuntime : public JSONRuntimeBase {
     // TVMArgs arg(values.data(), codes.data(), 5);
     // dump_toggle_fn->CallPacked(arg, &rv);
 
+    const std::string wall_clock_file = "ilavta_wallclock.json";
     auto call_node = nodes_[outputs_[0].id_];
     auto op_name = call_node.GetOpName();
+    int64_t sim_time = -1;
     if (op_name != "ilavta.dense" && op_name != "ilavta.bias_add" && op_name != "ilavta.relu") {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
@@ -162,7 +168,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       auto output_data = data_entry_[outputs_[0].id_];
       auto output_node = nodes_[outputs_[0].id_];
       auto dtype       = DLDataType2String(output_data->dtype);
-      runSimGetData("ilavta_dense", ila_asm, data_file, GetDataSize(*output_data), batch_size, n_wgt_rows, output_data->data, dtype);
+      sim_time = runSimGetData("ilavta_dense", ila_asm, data_file, GetDataSize(*output_data), batch_size, n_wgt_rows, output_data->data, dtype);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.bias_add") {
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto bias_eid = EntryID(input_nodes_[1], 0);
@@ -231,7 +237,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       std::string ila_asm   = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
       auto dtype            = DLDataType2String(output_data->dtype);
 
-      runSimGetData("ilavta_bias_add", ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data, dtype);
+      sim_time = runSimGetData("ilavta_bias_add", ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data, dtype);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.relu") {
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto output_eid = outputs_[0].id_;
@@ -274,8 +280,17 @@ class ILAVTARuntime : public JSONRuntimeBase {
       VTAMemFree(input_buf);
       VTAMemFree(uop_buf);
 
-      runSimGetData("ilavta_relu", ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data, dtype);
+      sim_time = runSimGetData("ilavta_relu", ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data, dtype);
     }
+    std::ifstream fin(wall_clock_file);
+    nlohmann::json wall_clock_data;
+    fin >> wall_clock_data;
+    if (wall_clock_data.find(op_name) == wall_clock_data.end()) {
+      wall_clock_data[op_name] = nlohmann::json::array({});
+    }
+    wall_clock_data[op_name].push_back(sim_time);
+    std::ofstream fout(wall_clock_data);
+    fout << wall_clock_data;
   }
 
  protected:
