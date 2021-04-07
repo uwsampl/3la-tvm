@@ -32,6 +32,7 @@
 #include <tvm/relay/type.h>
 #include <tvm/target/codegen.h>
 #include <tvm/te/operation.h>
+#include <tvm/support/json.hpp>
 
 #include <string>
 #include <typeinfo>
@@ -301,6 +302,18 @@ inline bool IsAutoSchedulerEnabled() {
   return transform::PassContext::Current()
       ->GetConfig<Bool>("relay.backend.use_auto_scheduler", Bool(false))
       .value();
+}
+
+inline void record_compile_time(std::chrono::duration<int64_t, std::nano> time_recorded, std::string filename) {
+  std::ifstream fin(filename);
+  nlohmann::json wall_clock_data;
+  fin >> wall_clock_data;
+  if (wall_clock_data.find("compile_time") == wall_clock_data.end()) {
+    wall_clock_data["compile_time"] = nlohmann::json::array({});
+  }
+  wall_clock_data["compile_time"].push_back(std::chrono::duration_cast<std::chrono::milliseconds>(time_recorded).count());
+  std::ofstream fout(filename);
+  fout << wall_clock_data;
 }
 
 }  // namespace backend
