@@ -23,7 +23,7 @@ if(USE_ILAVTA_CODEGEN STREQUAL "ON")
       --use-cfg=${CMAKE_CURRENT_BINARY_DIR}/vta_config.json)
   endif()
   execute_process(COMMAND ${VTA_CONFIG} --target OUTPUT_VARIABLE VTA_TARGET OUTPUT_STRIP_TRAILING_WHITESPACE)
-  message(STATUS "Build VTA runtime with target: " ${VTA_TARGET})
+  message(STATUS "Build VTA runtime with ILA")
   execute_process(COMMAND ${VTA_CONFIG} --defs OUTPUT_VARIABLE __vta_defs)
   string(REGEX MATCHALL "(^| )-D[A-Za-z0-9_=.]*" VTA_DEFINITIONS "${__vta_defs}")
 
