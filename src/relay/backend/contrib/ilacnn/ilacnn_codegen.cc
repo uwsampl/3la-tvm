@@ -9,6 +9,7 @@
 #include <iostream>
 #include <numeric>
 #include <sstream>
+#include <chrono>
 
 #include "../../utils.h"
 
@@ -76,6 +77,9 @@ class IlaCNNJSONSerializer : public backend::contrib::JSONSerializer {
 };  // class IlaCNNJSONSerializer
 
 runtime::Module IlaCNNCompiler(const ObjectRef& ref) {
+  LOG(INFO) << "Begin HLSCNN codegen";
+  const std::string wall_clock_file = "./ilacnn_compile_time.json";
+  auto start_time = std::chrono::high_resolution_clock::now();
   CHECK(ref->IsInstance<FunctionNode>());
   auto func = Downcast<Function>(ref);
   auto func_name = GetExtSymbol(func);
@@ -88,6 +92,8 @@ runtime::Module IlaCNNCompiler(const ObjectRef& ref) {
   const auto* pf = runtime::Registry::Get("runtime.IlaCNNRuntimeCreate");
   CHECK(pf != nullptr) << "Cannot find IlaCNN runtime module to create";
   auto mod = (*pf)(func_name, graph_json, params);
+  auto end_time = std::chrono::high_resolution_clock::now();
+  record_compile_time(end_time - start_time, wall_clock_file);
   return mod;
 }
 

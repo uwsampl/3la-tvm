@@ -34,6 +34,7 @@
 #include <tvm/target/virtual_device.h>
 #include <tvm/te/operation.h>
 #include <tvm/tir/usmp/utils.h>
+#include <tvm/support/json.hpp>
 
 #include <string>
 #include <typeinfo>

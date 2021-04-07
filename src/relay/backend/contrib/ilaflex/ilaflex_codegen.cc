@@ -9,6 +9,7 @@
 #include <iostream>
 #include <numeric>
 #include <sstream>
+#include <chrono>
 
 #include "../../utils.h"
 
@@ -63,7 +64,11 @@ class ILAFlexJSONSerializer : public backend::contrib::JSONSerializer {
 };  // class ILAFlexJSONSerializer
 
 runtime::Module ILAFlexCompiler(const ObjectRef& ref) {
+  LOG(INFO) << "Begin FlexASR Codegen";
+  const std::string wall_clock_file = "./ilaflex_compile_time.json";
+  auto start_time = std::chrono::high_resolution_clock::now();
   CHECK(ref->IsInstance<FunctionNode>());
+
   auto func = Downcast<Function>(ref);
   auto func_name = GetExtSymbol(func);
 
@@ -75,6 +80,8 @@ runtime::Module ILAFlexCompiler(const ObjectRef& ref) {
   const auto* pf = runtime::Registry::Get("runtime.ILAFlexRuntimeCreate");
   CHECK(pf != nullptr) << "Cannot find ILAFlex runtime module to create";
   auto mod = (*pf)(func_name, graph_json, params);
+  auto end_time = std::chrono::high_resolution_clock::now();
+  record_compile_time(end_time - start_time, wall_clock_file);
   return mod;
 }
 
