@@ -78,7 +78,7 @@ class IlaCNNJSONSerializer : public backend::contrib::JSONSerializer {
 
 runtime::Module IlaCNNCompiler(const ObjectRef& ref) {
   LOG(INFO) << "Begin HLSCNN codegen";
-  const std::string wall_clock_file = "./ilacnn_compile_time.json";
+  const std::string wall_clock_file = "./ilacnn_wallclock.json";
   auto start_time = std::chrono::high_resolution_clock::now();
   CHECK(ref->IsInstance<FunctionNode>());
   auto func = Downcast<Function>(ref);

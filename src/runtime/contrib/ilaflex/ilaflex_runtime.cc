@@ -1,5 +1,6 @@
 #include <tvm/runtime/ndarray.h>
 #include <tvm/runtime/registry.h>
+#include <tvm/support/json.hpp>
 
 #include <cstddef>
 #include <cstdlib>
@@ -9,6 +10,7 @@
 #include <iomanip>
 #include <fstream>
 #include <sstream>
+#include <chrono>
 
 #include "../json/json_node.h"
 #include "../json/json_runtime.h"
@@ -34,13 +36,19 @@ class ILAFlexRuntime : public JSONRuntimeBase {
 
   void Run() override {
     CHECK(symbol_name_.substr(0, 7) == "ilaflex") << symbol_name_;
-    LOG(INFO) << "[Runtime] entering " << symbol_name_ << " runtime";
+    LOG(INFO) << "[Runtime] enter " << symbol_name_ << " runtime";
 
     // TODO: we should probably package up all the files inside TVM
     // to avoid having to refer to other directories
     std::string driver_dir = getenv("PY_3LA_DRIVER");
+    driver_dir += "/flexnlp"; 
+    // LOG(INFO) << "[Runtime] operator name is " << nodes_[outputs_[0].id_].GetOpName();
+    // LOG(INFO) << "outputs size: " << outputs_.size() << '\t' << "input_size: " << input_nodes_.size();
 
-    driver_dir += "flexnlp"; 
+    auto op_name = nodes_[outputs_[0].id_].GetOpName();
+    const std::string wall_clock_file = "ilavta_wallclock.json";
+    std::chrono::_V2::system_clock::time_point start_time;
+    std::chrono::_V2::system_clock::time_point end_time;
 
     if (outputs_.size() == 1 && input_nodes_.size() == 3 &&
         nodes_[outputs_[0].id_].GetOpName() == "ilaflex.linear") {
@@ -141,7 +149,9 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       std::string call_cmd = call_builder.str();
 
       LOG(INFO) << "calling flexnlp linear layer driver";
+      start_time = std::chrono::high_resolution_clock::now();
       auto res = std::system(call_cmd.c_str());
+      end_time = std::chrono::high_resolution_clock::now();
       CHECK(res == 0) << "Error executing simulator " << call_cmd;
 
       // retrieve the results
@@ -271,7 +281,9 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       std::string call_cmd = call_builder.str();
 
       LOG(INFO) << "calling flexnlp lstm driver";
+      start_time = std::chrono::high_resolution_clock::now();
       auto res = std::system(call_cmd.c_str());
+      end_time = std::chrono::high_resolution_clock::now();
       CHECK(res == 0) << "Error executing simulator " << call_cmd;
 
       // retrieve the results
@@ -282,6 +294,17 @@ class ILAFlexRuntime : public JSONRuntimeBase {
     } else {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
+    std::ifstream fin(wall_clock_file);
+    nlohmann::json wall_clock_data;
+    fin >> wall_clock_data;
+    if (wall_clock_data.find(op_name) == wall_clock_data.end()) {
+      wall_clock_data[op_name] = nlohmann::json::array({});
+    }
+    wall_clock_data[op_name].push_back(
+      std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count()
+    );
+    std::ofstream fout(wall_clock_data);
+    fout << wall_clock_data;
     LOG(INFO) << "[Runtime] exit " << symbol_name_ << " runtime, resume host";
   }
 
