@@ -32,6 +32,7 @@
 #include <tvm/relay/type.h>
 #include <tvm/target/codegen.h>
 #include <tvm/te/operation.h>
+#include <tvm/support/json.hpp>
 
 #include <string>
 #include <typeinfo>
