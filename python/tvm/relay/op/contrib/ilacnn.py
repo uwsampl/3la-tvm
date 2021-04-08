@@ -106,5 +106,15 @@ def remove_grouping(func):
 
 @register_pattern_table("ilacnn")
 def pattern_table():
-    conv2d_pattern = ("ilacnn.conv2d", is_op('nn.conv2d')(wildcard(), wildcard()))
+    def callback(call):
+        # make sure groups is exactly 1
+        if not isinstance(call, relay.Call):
+            return False
+        attrs = call.attrs
+        if attrs is None:
+            return True
+        if "groups" not in attrs.keys():
+            return True
+        return attrs.groups == 1
+    conv2d_pattern = ("ilacnn.conv2d", is_op('nn.conv2d')(wildcard(), wildcard()), callback)
     return [conv2d_pattern]
