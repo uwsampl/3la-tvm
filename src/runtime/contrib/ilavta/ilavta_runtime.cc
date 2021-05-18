@@ -42,6 +42,8 @@ class ILAVTARuntime : public JSONRuntimeBase {
     // dump_toggle_fn->CallPacked(arg, &rv);
 
     const std::string wall_clock_file = "ilavta_wallclock.json";
+    std::string driver_dir = getenv("PY_3LA_DRIVER");
+    driver_dir += "/vta";
     auto call_node = nodes_[outputs_[0].id_];
     auto op_name = call_node.GetOpName();
     int64_t sim_time = -1;
@@ -169,7 +171,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       auto output_data = data_entry_[outputs_[0].id_];
       auto output_node = nodes_[outputs_[0].id_];
       auto dtype       = DLDataType2String(output_data->dtype);
-      sim_time = runSimGetData("ilavta_dense", ila_asm, data_file, GetDataSize(*output_data), batch_size, n_wgt_rows, output_data->data, dtype);
+      sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file, GetDataSize(*output_data), batch_size, n_wgt_rows, output_data->data, dtype);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.bias_add") {
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto bias_eid = EntryID(input_nodes_[1], 0);
@@ -238,7 +240,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       std::string ila_asm   = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
       auto dtype            = DLDataType2String(output_data->dtype);
 
-      sim_time = runSimGetData("ilavta_bias_add", ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data, dtype);
+      sim_time = runSimGetData("ilavta_bias_add", driver_dir, ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data, dtype);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.relu") {
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto output_eid = outputs_[0].id_;
@@ -281,7 +283,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       VTAMemFree(input_buf);
       VTAMemFree(uop_buf);
 
-      sim_time = runSimGetData("ilavta_relu", ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data, dtype);
+      sim_time = runSimGetData("ilavta_relu", driver_dir, ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data, dtype);
     }
     std::ifstream fin(wall_clock_file);
     nlohmann::json wall_clock_data = nlohmann::json::parse(fin);

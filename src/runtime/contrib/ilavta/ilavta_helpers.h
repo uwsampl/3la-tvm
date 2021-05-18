@@ -77,8 +77,11 @@ VTAGenericInsn get2DLoadStoreInsn(int opcode, int type, int sram_offset, int dra
 // in `./result`
 // Users should not call this directly
 std::string runILASimulator(const std::string exp_name,
+                            const std::string driver_dir,
+                            int64_t& compile_time_out,
                             const std::string ila_asm = "",
-                            const std::string data_dump = "", bool use_trace = true);
+                            const std::string data_dump = "",
+                            const bool use_trace = true);
 
 // Read back the result produced by the ILA simulator.
 // The results will be stored in `out_values`.
@@ -98,7 +101,7 @@ size_t loadILAOutput(const ila_output_data &out_values, uint8_t* buffer, size_t 
 // data produced by the ILA simulator and store into `output_data`
 // returns time spent on running the simulator
 // This is the interface provided to users
-int64_t runSimGetData(std::string pattern_name, std::string ila_asm, std::string data_dump,
+int64_t runSimGetData(std::string pattern_name, std::string driver_dir, std::string ila_asm, std::string data_dump,
                    size_t output_size, int n_output_rows, int n_output_cols, void *output_data, std::string output_dtype);
 
 // Create a data dump which could be used paired with an ILA ASM to produce
