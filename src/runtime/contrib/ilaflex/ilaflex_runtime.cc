@@ -46,7 +46,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
     // LOG(INFO) << "outputs size: " << outputs_.size() << '\t' << "input_size: " << input_nodes_.size();
 
     auto op_name = nodes_[outputs_[0].id_].GetOpName();
-    const std::string wall_clock_file = "ilavta_wallclock.json";
+    const std::string wall_clock_file = "ilaflex_wallclock.json";
     std::chrono::_V2::system_clock::time_point start_time;
     std::chrono::_V2::system_clock::time_point end_time;
 
@@ -295,8 +295,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       LOG(FATAL) << "Unknown pattern " << symbol_name_;
     }
     std::ifstream fin(wall_clock_file);
-    nlohmann::json wall_clock_data;
-    fin >> wall_clock_data;
+    nlohmann::json wall_clock_data = nlohmann::json::parse(fin);
     fin.close();
     if (wall_clock_data.find(op_name) == wall_clock_data.end()) {
       wall_clock_data[op_name] = nlohmann::json::array({});
