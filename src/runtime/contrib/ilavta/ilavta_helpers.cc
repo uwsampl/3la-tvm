@@ -284,8 +284,11 @@ std::string dump_datafile(uint8_t* input_buf, size_t input_size,
 }
 
 std::string runILASimulator(const std::string exp_name,
+                            const std::string driver_dir,
+                            int64_t& out_compile_time,
                             const std::string ila_asm,
-                            const std::string data_dump, bool use_trace) {
+                            const std::string data_dump,
+                            const bool use_trace) {
   // Check dump file
   std::string input_filename = exp_name + "_input.json";
   std::string output_filename = exp_name + "_out.json";
@@ -293,19 +296,22 @@ std::string runILASimulator(const std::string exp_name,
     auto ret = std::system("stat vta_sim_dump.json > /dev/null 2> /dev/null");
     CHECK(ret == 0) << "vta_sim_dump.json does not exists";
 
-    ret = std::system(("python3 produce_ila_fragment.py vta_sim_dump.json ./prog_frag/" + input_filename).c_str());
+    ret = std::system(("python3 " + driver_dir + "/produce_ila_fragment.py vta_sim_dump.json ./prog_frag/" + input_filename).c_str());
     CHECK(ret == 0) << "Failed to produce program fragment";
   } else {
-    CHECK(std::system(("python3 produce_prog_frag.py "
+    auto start_time = std::chrono::high_resolution_clock::now();
+    CHECK(std::system(("python3 " + driver_dir + "/produce_prog_frag.py "
                       + ila_asm + " "
                       + data_dump + " "
                       + "./prog_frag/" + input_filename).c_str()) == 0) << "Failed to convert to program fragment";
+    auto end_time = std::chrono::high_resolution_clock::now();
+    out_compile_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
   }
-  int ret = std::system(("vta_ila_sim " + exp_name).c_str());
-  CHECK(ret == 0) << "Failed to run ILA simulator";
+  // int ret = std::system(("vta_ila_sim " + exp_name).c_str());
+  // CHECK(ret == 0) << "Failed to run ILA simulator";
 
-  ret = std::system(("stat ./result/" + output_filename + " > /dev/null 2> /dev/null").c_str());
-  CHECK(ret == 0) << "Not output result found";
+  // ret = std::system(("stat ./result/" + output_filename + " > /dev/null 2> /dev/null").c_str());
+  // CHECK(ret == 0) << "Not output result found";
 
   return "./result/" + output_filename;
 }
@@ -354,18 +360,19 @@ void copy_data(uint8_t* from_, T out_data, size_t size) {
   }
 }
 
-int64_t runSimGetData(std::string pattern_name, std::string ila_asm, std::string data_dump,
+int64_t runSimGetData(std::string pattern_name, std::string driver_dir, std::string ila_asm, std::string data_dump,
                   size_t output_size, int n_output_rows, int n_output_cols, void *output_data,
                   std::string output_dtype) {
   auto start_time = std::chrono::high_resolution_clock::now();
-  std::string output_file = runILASimulator(pattern_name, ila_asm, data_dump, false);
+  int64_t compile_time;
+  std::string output_file = runILASimulator(pattern_name, driver_dir, compile_time, ila_asm, data_dump, false);
   auto end_time = std::chrono::high_resolution_clock::now();
 
   ila_output_data out_data;
   readILAOutput(output_file, out_data);
 
   uint8_t* buffer = new uint8_t[output_size];
-
+  return compile_time;
   auto buf_read = loadILAOutput(out_data, buffer, n_output_rows, n_output_cols);
   // CHECK(buf_read == output_size) << "Output size mismatch: " << buf_read << " v.s. " << output_size;
   if (output_dtype == "int32") {
@@ -379,7 +386,8 @@ int64_t runSimGetData(std::string pattern_name, std::string ila_asm, std::string
   } else {
     LOG(FATAL) << "Unrecognized output data type: " << output_dtype;
   }
-  return std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+  return compile_time;
+  // return std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 }
 
 }
