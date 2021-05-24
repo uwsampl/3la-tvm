@@ -59,9 +59,9 @@ ref = np.add(np.matmul(x_np, np.transpose(y_np)), z_np)
 # y_np = coef * np.random.random_sample((n, m), dtype = np.float32)
 # z_np = coef * np.random.random_sample((n,), dtype = np.float32)
 
-x_tvm = tvm.nd.array(x_np, ctx=ctx)
-y_tvm = tvm.nd.array(y_np, ctx=ctx)
-z_tvm = tvm.nd.array(z_np, ctx=ctx)
+x_tvm = tvm.nd.array(x_np)
+y_tvm = tvm.nd.array(y_np)
+z_tvm = tvm.nd.array(z_np)
 
 print("[Python] Execute the compiled model")
 runtime_exec.set_input(0, x_tvm)
