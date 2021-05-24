@@ -307,11 +307,11 @@ std::string runILASimulator(const std::string exp_name,
     auto end_time = std::chrono::high_resolution_clock::now();
     out_compile_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
   }
-  // int ret = std::system(("vta_ila_sim " + exp_name).c_str());
-  // CHECK(ret == 0) << "Failed to run ILA simulator";
+  int ret = std::system(("vta_ila_sim " + exp_name).c_str());
+  CHECK(ret == 0) << "Failed to run ILA simulator";
 
-  // ret = std::system(("stat ./result/" + output_filename + " > /dev/null 2> /dev/null").c_str());
-  // CHECK(ret == 0) << "Not output result found";
+  ret = std::system(("stat ./result/" + output_filename + " > /dev/null 2> /dev/null").c_str());
+  CHECK(ret == 0) << "Not output result found";
 
   return "./result/" + output_filename;
 }
