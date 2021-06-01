@@ -513,6 +513,25 @@ Map<Target, IRModule> TargetStrModuleMapToTargetModuleMap(
  */
 void UpdateAutoSchedulerOpWeights(tec::TECompiler compiler);
 
+inline void record_compile_time(std::chrono::duration<int64_t, std::nano> time_recorded, std::string filename) {
+  std::ifstream fin(filename);
+  std::stringstream ss;
+  ss << fin.rdbuf();
+  nlohmann::json wall_clock_data;
+  auto content = ss.str();
+  if (content.size() != 0) {
+    wall_clock_data = nlohmann::json::parse(content);
+  } else {
+    wall_clock_data = nlohmann::json::object({});
+  }
+  if (wall_clock_data.find("compile_time") == wall_clock_data.end()) {
+    wall_clock_data["compile_time"] = nlohmann::json::array({});
+  }
+  wall_clock_data["compile_time"].push_back(std::chrono::duration_cast<std::chrono::milliseconds>(time_recorded).count());
+  std::ofstream fout(filename);
+  fout << wall_clock_data;
+}
+
 }  // namespace backend
 }  // namespace relay
 }  // namespace tvm
