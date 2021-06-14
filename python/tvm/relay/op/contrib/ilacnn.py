@@ -57,6 +57,53 @@ def remove_padding(func):
     return remover.visit(func)
 
 
+def remove_grouping(func):
+    """
+    HLSCNN cannot handle grouped convolutions,
+    so this function rewrites all grouped convolutions
+    into individual convolutions that are recombined
+    """
+    class GroupingRemover(ExprMutator):
+        def visit_call(self, call):
+            if call.attrs is None:
+                return super().visit_call(call)
+            attrs = call.attrs
+            if not isinstance(attrs, relay.op.op_attrs.Conv2DAttrs):
+                return super().visit_call(call)
+            groups = attrs.groups
+            # if there's only one group, then there's nothing to do
+            if groups == 1:
+                return super().visit_call(call)
+
+            # otherwise, split by number of groups,
+            # convolve each group, and concatenate the result
+            #print(call.args[0].checked_type, call.args[1].checked_type, groups)
+
+            input_expr = self.visit(call.args[0])
+            weight_expr = self.visit(call.args[1])
+
+            input_splits = relay.op.split(input_expr, groups, axis=1)
+            weight_splits = relay.op.split(weight_expr, groups, axis=0)
+            group_convs = [
+                relay.nn.conv2d(input_splits[i],
+                                weight_splits[i],
+                                strides=attrs.strides,
+                                padding=attrs.padding,
+                                dilation=attrs.dilation,
+                                groups=1,
+                                kernel_size=attrs.kernel_size,
+                                data_layout=attrs.data_layout,
+                                kernel_layout=attrs.kernel_layout,
+                                out_layout=attrs.out_layout,
+                                out_dtype=attrs.out_dtype)
+                for i in range(groups)
+            ]
+            return relay.op.concatenate(group_convs, axis=1)
+
+    remover = GroupingRemover()
+    return remover.visit(func)
+
+
 @register_pattern_table("ilacnn")
 def pattern_table():
     conv2d_pattern = ("ilacnn.conv2d", is_op('nn.conv2d')(wildcard(), wildcard()))
