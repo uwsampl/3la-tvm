@@ -211,8 +211,11 @@ def build_relay_module(batch_size, input_size, hidden_size, time_steps, dense_di
                                builder.get())
     match_lstm = annotate_exact_matches(main_func, lstm_pattern, "ilaflex", "ilaflex.lstm")
     match_linear = annotate_exact_matches(match_lstm, linear_pattern, "ilaflex", "ilaflex.linear")
+    # match_linear = annotate_exact_matches(main_func, linear_pattern, "ilaflex", "ilaflex.linear")
+
     # print(match_linear)
     mod["main"] = match_linear
+    # mod["main"] = match_lstm
 
     mod_wo_acc = tvm.IRModule()
     mod_wo_acc["main"] = main_func
@@ -234,6 +237,13 @@ def main(data_file, batch_size, time_steps, seed):
 
     mod, mod_wo_acc = build_relay_module(batch_size, input_size, hidden_size, time_steps, dense_dim)
 
+    tl = tool()
+    lstm_i2h_w, _ = tl.get_adpfloat_bias(lstm_i2h_w)
+    lstm_h2h_w, _ = tl.get_adpfloat_bias(lstm_h2h_w)
+    lstm_bias, _ = tl.get_adpfloat_bias(lstm_bias)
+    linear_w, _ = tl.get_adpfloat_bias(linear_w)
+    linear_bias, _ = tl.get_adpfloat_bias(linear_bias)
+    
     # generate initial values for the input_vars
     if seed is not None:
         np.random.seed(seed)
@@ -243,6 +253,10 @@ def main(data_file, batch_size, time_steps, seed):
     random_input = np.random.uniform(-1, 1, (batch_size, time_steps, input_size))
     random_hidden = np.zeros((batch_size, hidden_size))
     random_cell = np.zeros((batch_size, hidden_size))
+    
+    random_input, _ = tl.get_adpfloat_bias(random_input)
+    random_hidden, _ = tl.get_adpfloat_bias(random_hidden)
+    random_cell, _ = tl.get_adpfloat_bias(random_cell)
 
     args = map(lambda a: a.astype("float32"), [
         random_input, random_hidden, random_cell,
@@ -270,12 +284,13 @@ def main(data_file, batch_size, time_steps, seed):
     # print(ret.asnumpy())
 
     
-    tl = tool()
+    err_out_list = []
     for i in range(len(out_llvm)):
         ref_q = tl.get_adpfloat_bias(out_llvm[i])[0]
         err_out, err_ref = tl.cal_error(out_flex[i], ref_q)
+        err_out_list.append(err_out)
         print("timestep No.{} --- relative error: {:5.5%} vs. output, {:5.5%} vs. ref".format(i, err_out, err_ref))
-
+    print("\n average relative error: {:5.5%}".format(sum(err_out_list)/len(err_out_list)))
 
 
 if __name__ == "__main__":
