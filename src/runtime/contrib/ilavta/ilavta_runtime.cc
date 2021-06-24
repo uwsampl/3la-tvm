@@ -332,7 +332,21 @@ class ILAVTARuntime : public JSONRuntimeBase {
                                             "ilavta_conv1d");
       std::string ila_asm   = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
       auto dtype            = DLDataType2String(output_data->dtype);
-      sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file, GetDataSize(*output_data), vec_cnt, O, output_data->data, dtype);
+      sim_time = runSimGetData("ilavta_conv1d", driver_dir, ila_asm, data_file, GetDataSize(*output_data), vec_cnt, O, output_data->data, dtype);
+      uint8_t* out_data = reinterpret_cast<uint8_t*>(malloc(sizeof(uint8_t) * GetDataSize(*output_data)));
+      uint8_t* raw_data = reinterpret_cast<uint8_t*>(output_data->data);
+      ptr = 0;
+      for (int batch = 0; batch < N; ++batch) {
+        int start_offset = batch * O * (W - wgtW + 1);
+        for (int n_kernel = 0; n_kernel < O; ++ n_kernel) {
+          for (int ncol = 0; ncol < W  - wgtW + 1; ++ncol) {
+            out_data[ptr++] = raw_data[start_offset + n_kernel + ncol * O];
+          }
+        }
+      }
+      for (int i = 0; i < ptr; ++i) {
+        raw_data[i] = out_data[i];
+      }
     }
     std::ifstream fin(wall_clock_file);
     nlohmann::json wall_clock_data = nlohmann::json::parse(fin);
