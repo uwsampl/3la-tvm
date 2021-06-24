@@ -55,6 +55,11 @@ def make_pattern_relu():
     data = wildcard()
     return is_op('nn.relu')(data)
 
+def make_pattern_conv1d():
+    data = wildcard()
+    weight = wildcard()
+    return is_op('nn.conv1d')(data, weight)
+
 @register_pattern_table("ilavta")
 def pattern_table():
     # conv2d_pat = ("ilavta.conv2d", make_pattern_conv2d())
@@ -62,5 +67,6 @@ def pattern_table():
     dense_pat  = ("ilavta.dense", make_pattern_dense())  
     bias_add_pat = ("ilavta.bias_add", make_pattern_bias_add())
     relu_pat = ("ilavta.relu", make_pattern_relu())
-    ilavta_patterns = [matmul_pat, dense_pat, bias_add_pat, relu_pat]
+    conv1d_pat = ("ilavta.conv1d", make_pattern_conv1d())
+    ilavta_patterns = [matmul_pat, dense_pat, bias_add_pat, relu_pat, conv1d_pat]
     return ilavta_patterns
