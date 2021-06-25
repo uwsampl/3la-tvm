@@ -42,7 +42,7 @@ class LinearLayerRewriter(ExprMutator):
             return super().visit_call(call)
 
         reshape_arg = left_arg.args[0]
-        if reshape_arg.op != "nn.dense":
+        if reshape_arg.op.name != "nn.dense":
             return super().visit_call(call)
 
         # otherwise we have a match
