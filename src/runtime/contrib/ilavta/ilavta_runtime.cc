@@ -47,8 +47,9 @@ class ILAVTARuntime : public JSONRuntimeBase {
     auto call_node = nodes_[outputs_[0].id_];
     auto op_name = call_node.GetOpName();
     int64_t sim_time = -1;
-    if (op_name != "ilavta.dense" && op_name != "ilavta.bias_add" && op_name != "ilavta.relu") {
-      LOG(FATAL) << "Unknown pattern " << symbol_name_;
+    if (op_name != "ilavta.dense" && op_name != "ilavta.bias_add"
+     && op_name != "ilavta.relu" && op_name != "ilavta.conv1d") {
+      LOG(FATAL) << "Unknown pattern " << symbol_name_ << " " << op_name;
     }
 
     if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.dense") {
@@ -333,20 +334,20 @@ class ILAVTARuntime : public JSONRuntimeBase {
       std::string ila_asm   = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
       auto dtype            = DLDataType2String(output_data->dtype);
       sim_time = runSimGetData("ilavta_conv1d", driver_dir, ila_asm, data_file, GetDataSize(*output_data), vec_cnt, O, output_data->data, dtype);
-      uint8_t* out_data = reinterpret_cast<uint8_t*>(malloc(sizeof(uint8_t) * GetDataSize(*output_data)));
-      uint8_t* raw_data = reinterpret_cast<uint8_t*>(output_data->data);
-      ptr = 0;
-      for (int batch = 0; batch < N; ++batch) {
-        int start_offset = batch * O * (W - wgtW + 1);
-        for (int n_kernel = 0; n_kernel < O; ++ n_kernel) {
-          for (int ncol = 0; ncol < W  - wgtW + 1; ++ncol) {
-            out_data[ptr++] = raw_data[start_offset + n_kernel + ncol * O];
-          }
-        }
-      }
-      for (int i = 0; i < ptr; ++i) {
-        raw_data[i] = out_data[i];
-      }
+      // uint8_t* out_data = reinterpret_cast<uint8_t*>(malloc(sizeof(uint8_t) * GetDataSize(*output_data)));
+      // uint8_t* raw_data = reinterpret_cast<uint8_t*>(output_data->data);
+      // ptr = 0;
+      // for (int batch = 0; batch < N; ++batch) {
+      //   int start_offset = batch * O * (W - wgtW + 1);
+      //   for (int n_kernel = 0; n_kernel < O; ++n_kernel) {
+      //     for (int ncol = 0; ncol < W  - wgtW + 1; ++ncol) {
+      //       out_data[ptr++] = raw_data[start_offset + n_kernel + ncol * O];
+      //     }
+      //   }
+      // }
+      // for (int i = 0; i < ptr; ++i) {
+      //   raw_data[i] = out_data[i];
+      // }
     }
     std::ifstream fin(wall_clock_file);
     nlohmann::json wall_clock_data = nlohmann::json::parse(fin);
