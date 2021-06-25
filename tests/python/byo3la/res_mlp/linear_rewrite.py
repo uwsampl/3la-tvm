@@ -14,9 +14,9 @@ class LinearLayerRewriter(ExprMutator):
     """
     Rewrites the linear layers implemented
     in the automatically imported ResMLP
-    (which look like reshape(dense(*, *), (1, *, *)) + *)
+    (which look like reshape(dense(*, *), (*, *, *)) + *)
     into those matched in FlexNLP
-    (reshape(bias_add(dense(*, *), *)), (1, *, *))
+    (reshape(bias_add(dense(*, *), *)), (*, *, *))
 
     It would be preferable to find simple rewrite rules
     to do this via a rewrite system!
@@ -40,8 +40,6 @@ class LinearLayerRewriter(ExprMutator):
         reshape_attrs = left_arg.attrs
         if len(reshape_attrs.newshape) != 3:
             return super().visit_call(call)
-        if reshape_attrs.newshape[0] != 1:
-            return super().visit_call(call)
         newshape = tuple(reshape_attrs.newshape)
 
         reshape_arg = left_arg.args[0]
@@ -49,6 +47,8 @@ class LinearLayerRewriter(ExprMutator):
             return super().visit_call(call)
 
         # otherwise we have a match
+        # TODO: figure out when this rewrite is correct
+        #       (what conditions on the shapes must apply)
         dense_term = self.visit(reshape_arg)
         bias_term = self.visit(bias_arg)
         new_term = relay.reshape(
