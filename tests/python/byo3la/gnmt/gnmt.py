@@ -396,7 +396,7 @@ def gnmt_definition(batch_size, input_size, in_seq_len, out_seq_len, hidden_size
     # subsequent layers are all identical
     last_out = dec_l1_out
     for i in range(1, 4):
-        concat_inp = builder.let("dec_l{i+1}_inp", relay.concatenate([last_out, attn_result], axis=2))
+        concat_inp = builder.let(f"dec_l{i+1}_inp", relay.concatenate([last_out, attn_result], axis=2))
         layer_res = builder.let(f"dec_l{i+1}_res",
                                 dec_later_lstm(concat_inp, dec_hidden[i],
                                                dec_i2h_weight[i], dec_h2h_weight[i],
