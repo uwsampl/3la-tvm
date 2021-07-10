@@ -36,13 +36,15 @@ class ILAFlexRuntime : public JSONRuntimeBase {
 
   void Run() override {
     CHECK(symbol_name_.substr(0, 7) == "ilaflex") << symbol_name_;
-    LOG(INFO) << "[Runtime] entering " << symbol_name_ << " runtime";
+    LOG(INFO) << "[Runtime] enter " << symbol_name_ << " runtime";
 
     // TODO: we should probably package up all the files inside TVM
     // to avoid having to refer to other directories
     std::string driver_dir = getenv("PY_3LA_DRIVER");
+    driver_dir += "/flexnlp"; 
+    // LOG(INFO) << "[Runtime] operator name is " << nodes_[outputs_[0].id_].GetOpName();
+    // LOG(INFO) << "outputs size: " << outputs_.size() << '\t' << "input_size: " << input_nodes_.size();
 
-    driver_dir += "flexnlp"; 
     auto op_name = nodes_[outputs_[0].id_].GetOpName();
     const std::string wall_clock_file = "ilaflex_wallclock.json";
     std::chrono::_V2::system_clock::time_point start_time;
@@ -290,7 +292,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       std::copy(o_data_ptr, o_data_ptr + o_data_size,
                 reinterpret_cast<float*>(node_data_o->data));
     } else {
-      LOG(FATAL) << "Unknown pattern " << symbol_name_;
+      LOG(FATAL) << "Unknown pattern " << outputs_.size() << " " << nodes_[outputs_[0].id_].GetOpName();
     }
     std::ifstream fin(wall_clock_file);
     nlohmann::json wall_clock_data = nlohmann::json::parse(fin);
