@@ -160,6 +160,14 @@ def create_lstm_call(mod, lstm_input, initial_state,
                      f(lstm_input, initial_state,
                        i2h_weight, h2h_weight, bias))
 
+def make_dot_attention():
+    linear_key = wildcard()
+    query = wildcard()
+    bmm = is_op('nn.batch_matmul')(linear_key, query)
+    prod = is_op('transpose')(bmm)
+    scores = is_op('nn.softmax')(prod)
+    return scores
+
 
 def make_pattern_linear():
     a = wildcard()
@@ -173,5 +181,6 @@ def make_pattern_linear():
 @register_pattern_table("ilaflex")
 def pattern_table():
     linear_pat = ("ilaflex.linear", make_pattern_linear())
-    ilaflex_patterns = [linear_pat]
+    attention_pat = ("ilflex.attention", make_dot_attention())
+    ilaflex_patterns = [linear_pat, attention_pat]
     return ilaflex_patterns
