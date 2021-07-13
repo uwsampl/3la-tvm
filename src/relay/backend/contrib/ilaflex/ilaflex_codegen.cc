@@ -41,7 +41,7 @@ class ILAFlexJSONSerializer : public backend::contrib::JSONSerializer {
           << "JSON runtime only supports composite functions.";
       name = comp.value();
 
-      if (name != "ilaflex.linear" && name != "ilaflex.lstm") {
+      if (name != "ilaflex.linear" && name != "ilaflex.lstm" && name != "ilaflex.attention") {
         LOG(FATAL) << "Unrecognized pattern: " << name;
       }
     } else {

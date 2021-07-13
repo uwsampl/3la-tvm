@@ -347,17 +347,9 @@ class MatchMutator(ExprMutator):
         inner_args_map = {}
         for var in inner_free_vars:
             inner_args_map[var] = relay.Var(var.name_hint + str(self.composite_counter), match_args[self.to_key(var)].checked_type)
-        print('======================')
-        print('Free vars inner')
-        print(inner_free_vars)
-        print(self.target_vars)
-        print('Body:')
-        print(inner_body)
-        print('======================')
         inner_body_rewritten = deduplicate_vars(inner_body, var_map=inner_args_map, use_original=True)
         inner_func = relay.Function(list(map(inner_args_map.get, inner_free_vars)), inner_body_rewritten)
         inner_func = inner_func.with_attr("Composite", self.composite_name)
-
         outer_args = [relay.Var(f"outer_arg_{i}") for i in range(len(inner_free_vars))]
         outer_func = relay.Function(outer_args, inner_func(*outer_args))
         outer_func = outer_func.with_attr("Compiler", self.compiler_name)

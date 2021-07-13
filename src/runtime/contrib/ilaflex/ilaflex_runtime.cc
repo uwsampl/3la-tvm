@@ -291,6 +291,80 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       // copy the result and resume
       std::copy(o_data_ptr, o_data_ptr + o_data_size,
                 reinterpret_cast<float*>(node_data_o->data));
+    } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilaflex.attention") {
+      LOG(INFO) << "[Runtime] operator name is " << nodes_[outputs_[0].id_].GetOpName();
+      // dec_data
+      auto eid_dec = EntryID(input_nodes_[0], 0);
+      auto& node_data_dec = data_entry_[eid_dec];
+      // CHECK(node_data_inp->ndim == 3);
+      // auto num_ts = node_data_inp->shape[1];
+      // CHECK(node_data_inp->shape[2] % 16 == 0);
+      auto num_v_in = (int)(node_data_dec->shape[2])/16;
+      auto dec_data_size = GetDataSize(*node_data_dec)/sizeof(float);
+      float* inp_data_ptr = new float[dec_data_size];
+      std::copy(reinterpret_cast<float*>(node_data_dec->data),
+                reinterpret_cast<float*>(node_data_dec->data) + dec_data_size,
+                inp_data_ptr);
+
+      // attention enc_data
+      auto eid_enc_data = EntryID(input_nodes_[1], 0);
+      auto& enc_data = data_entry_[eid_enc_data];
+      auto num_ts = enc_data->shape[1];
+      auto enc_data_size = GetDataSize(*enc_data)/sizeof(float);
+      float* enc_data_ptr = new float[enc_data_size];
+      std::copy(reinterpret_cast<float*>(enc_data->data),
+                reinterpret_cast<float*>(enc_data->data) + enc_data_size,
+                enc_data_ptr);
+
+      auto node_data_o = data_entry_[EntryID(outputs_[0])];
+      auto o_data_size = GetDataSize(*node_data_o)/sizeof(float);
+      float* o_data_ptr = new float[o_data_size];
+
+      /* TODO
+       *  - FlexNLP ILA simulator is available in $PATH as "flexnlp_ila_sim"
+       *  - generate tensor-level assembly
+       *  - generate data library
+       *  - translate to ILA instruction program fragment
+       *  - invoke the ILA simulator
+       *  - read back the result and store to o_data_ptr
+       */
+      // dump data to files
+      std::system("mkdir -p data");
+      dump_data(inp_data_ptr, dec_data_size, "./data/dec.txt");
+      dump_data(enc_data_ptr, enc_data_size, "./data/enc.txt");
+
+      // set flexnlp tensor assembly parameters;
+      int mem_idx_enc = 0;
+      int mem_idx_dec = 0;
+      int adpbias_enc = 1;
+      int adpbias_dec = 2;
+      int adpbias_softmax = 3;
+      int adpbias_out = 4;
+
+      std::cerr << "dec shape: (" << node_data_dec->shape[0] << ", " << node_data_dec->shape[1] << ", " << node_data_dec->shape[2] << ")\n";
+      std::cerr << "num_v_in: " << num_v_in << "\n";
+      std::cerr << "enc shape: (" << enc_data->shape[0] << ", " << enc_data->shape[1] << ", " << enc_data->shape[2] << ")\n";
+      std::cerr << "num_ts: " << num_ts << "\n";
+
+      // call ILAng-generated simulator
+      std::stringstream call_builder;
+      call_builder << "python3 " << driver_dir << "/attention_driver.py "
+                   << num_ts << " " << num_v_in << " "
+                   << mem_idx_enc << " " << mem_idx_dec << " "
+                   << adpbias_enc << " " << adpbias_dec << " " << adpbias_softmax << " " << adpbias_out;
+      std::string call_cmd = call_builder.str();
+
+      LOG(INFO) << "calling flexnlp lstm driver";
+      start_time = std::chrono::high_resolution_clock::now();
+      auto res = std::system(call_cmd.c_str());
+      end_time = std::chrono::high_resolution_clock::now();
+      CHECK(res == 0) << "Error executing simulator " << call_cmd;
+
+      // retrieve the results
+      retrieve_result(o_data_ptr, o_data_size, "./data/attn_out.txt");
+      // copy the result and resume
+      std::copy(o_data_ptr, o_data_ptr + o_data_size,
+                reinterpret_cast<float*>(node_data_o->data));
     } else {
       LOG(FATAL) << "Unknown pattern " << outputs_.size() << " " << nodes_[outputs_[0].id_].GetOpName();
     }
