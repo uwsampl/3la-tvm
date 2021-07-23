@@ -68,5 +68,5 @@ def pattern_table():
     bias_add_pat = ("ilavta.bias_add", make_pattern_bias_add())
     relu_pat = ("ilavta.relu", make_pattern_relu())
     conv1d_pat = ("ilavta.conv1d", make_pattern_conv1d())
-    ilavta_patterns = [relu_pat, conv1d_pat]
+    ilavta_patterns = [relu_pat, conv1d_pat, dense_pat, bias_add_pat]
     return ilavta_patterns
