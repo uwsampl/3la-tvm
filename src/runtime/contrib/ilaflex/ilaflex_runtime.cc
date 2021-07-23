@@ -348,9 +348,9 @@ class ILAFlexRuntime : public JSONRuntimeBase {
                    << "--num_ts " << num_ts << " --num_v " << num_v_in << " --mem_idx_enc "
                    << mem_idx_enc << " --mem_idx_dec " << mem_idx_dec;
       std::string call_cmd = call_builder.str();
-      std::cerr << "calling " << call_cmd << "\n";
+      // std::cerr << "calling " << call_cmd << "\n";
 
-      LOG(INFO) << "calling flexnlp lstm driver";
+      LOG(INFO) << "calling flexnlp attention driver";
       start_time = std::chrono::high_resolution_clock::now();
       auto res = std::system(call_cmd.c_str());
       end_time = std::chrono::high_resolution_clock::now();
