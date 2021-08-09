@@ -336,10 +336,6 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       // set flexnlp tensor assembly parameters;
       int mem_idx_enc = 0;
       int mem_idx_dec = 0;
-      int adpbias_enc = 1;
-      int adpbias_dec = 2;
-      int adpbias_softmax = 3;
-      int adpbias_out = 4;
 
       std::cerr << "dec shape: (" << node_data_dec->shape[0] << ", " << node_data_dec->shape[1] << ", " << node_data_dec->shape[2] << ")\n";
       std::cerr << "num_v_in: " << num_v_in << "\n";
@@ -349,19 +345,19 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       // call ILAng-generated simulator
       std::stringstream call_builder;
       call_builder << "python3 " << driver_dir << "/attention_driver.py "
-                   << num_ts << " " << num_v_in << " "
-                   << mem_idx_enc << " " << mem_idx_dec << " "
-                   << adpbias_enc << " " << adpbias_dec << " " << adpbias_softmax << " " << adpbias_out;
+                   << "--num_ts " << num_ts << " --num_v " << num_v_in << " --mem_idx_enc "
+                   << mem_idx_enc << " --mem_idx_dec " << mem_idx_dec;
       std::string call_cmd = call_builder.str();
+      // std::cerr << "calling " << call_cmd << "\n";
 
-      LOG(INFO) << "calling flexnlp lstm driver";
+      LOG(INFO) << "calling flexnlp attention driver";
       start_time = std::chrono::high_resolution_clock::now();
       auto res = std::system(call_cmd.c_str());
       end_time = std::chrono::high_resolution_clock::now();
       CHECK(res == 0) << "Error executing simulator " << call_cmd;
 
       // retrieve the results
-      retrieve_result(o_data_ptr, o_data_size, "./data/attn_out.txt");
+      retrieve_result(o_data_ptr, o_data_size, "./data/result_attention_ila.txt");
       // copy the result and resume
       std::copy(o_data_ptr, o_data_ptr + o_data_size,
                 reinterpret_cast<float*>(node_data_o->data));
