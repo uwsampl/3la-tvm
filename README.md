@@ -27,6 +27,28 @@ See the readme at [the VTA fork](https://github.com/uwsampl/3la-vta) to see a de
 
 You can use `vta.testing.ila_converter.convert(dump_file, dest_file)` to convert a VTA simulator dump into an ILA program fragment.
 
+# 3LA environment setup
+
+## Docker setup
+Please follow the instruction [here](https://github.com/PrincetonUniversity/3la-integrate) to set up the 3LA integrated docker container.
+
+To attach to the container, run `sudo docker exec -it <name of the container> /bin/bash`
+
+Before running any 3LA related test, `source init.sh` under `/root` first.
+
+## 3LA tvm setup
+Please follow the steps [here](https://tvm.apache.org/docs/install/from_source.html#developers-get-source-from-github). Note to replace the github repo link to this repo. Then switch to `conv1d-codegen` or `3la-rebase-complete` branch.
+
+Before running `cmake`, please add the following lines to `config.cmake` 
+```cmake
+set(USE_ILAVTA_CODEGEN ON)
+set(USE_ILACNN_CODEGEN ON)
+set(USE_ILAFLEX_CODEGEN ON)
+```
+and then set `USE_LLVM` to `ON`.
+
+Before installing the python interface of this variant of tvm, you probably need to uninstall the tvm  that was installed when building the docker image (to do so, run `pip uninstall <package>`).
+
 <img src=https://raw.githubusercontent.com/apache/incubator-tvm-site/main/images/logo/tvm-logo-small.png width=128/> Open Deep Learning Compiler Stack
 [Documentation](https://tvm.apache.org/docs) |
 [Contributors](CONTRIBUTORS.md) |
