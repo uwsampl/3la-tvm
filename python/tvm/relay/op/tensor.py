@@ -1285,3 +1285,17 @@ def isinf(data):
         The computed result.
     """
     return _make.isinf(data)
+
+def accelerator_call(func, shape):
+    """Stub operator for accelerator calls
+
+    Parameters
+    ----------
+    func : str
+        The name of the accelerator function
+    Returns
+    -------
+    result : relay.Expr
+        The computed expression
+    """
+    return _make.accelerator_call(func, shape)

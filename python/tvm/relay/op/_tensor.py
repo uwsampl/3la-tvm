@@ -93,6 +93,7 @@ register_broadcast_schedule("fast_erf")
 # this will not be used in actual computation
 # as on_device will be removed during DeviceAnnotation pass
 register_injective_schedule("on_device")
+# register_broadcast_schedule("accelerator_call")
 
 
 # zeros
