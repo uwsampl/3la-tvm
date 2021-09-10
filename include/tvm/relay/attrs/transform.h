@@ -510,6 +510,16 @@ struct EinsumAttrs : public tvm::AttrsNode<EinsumAttrs> {
   }
 };  // struct EinsumAttrs
 
+/*! \brief Attributes for calling accelerators */
+struct AcceleratorCallAttrs : public tvm::AttrsNode<AcceleratorCallAttrs> {
+  std::string func_name;
+  Array<Integer> output_shape;
+  TVM_DECLARE_ATTRS(AcceleratorCallAttrs, "relay.attrs.AcceleratorCallAttrs") {
+    TVM_ATTR_FIELD(func_name).describe("The name of the accelerator function").set_default("unknown");
+    TVM_ATTR_FIELD(output_shape).describe("Inferred output shape for the accelerator call");
+  }
+};  // struct AcceleratorCallAttrs
+
 }  // namespace relay
 }  // namespace tvm
 #endif  // TVM_RELAY_ATTRS_TRANSFORM_H_
