@@ -498,6 +498,42 @@ RELAY_REGISTER_OP("ndarray_size")
     .set_support_level(10)
     .set_attr<FTVMCompute>("FTVMCompute", NdarraySizeCompute);
 
+
+TVM_REGISTER_NODE_TYPE(AcceleratorCallAttrs);
+
+bool AcceleratorCallRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
+                    const TypeReporter& reporter) {
+    ICHECK(num_inputs == 0);
+    ICHECK(types.size() == 1);
+    auto shape_attr = attrs.as<AcceleratorCallAttrs>();
+    auto shape = shape_attr->output_shape;
+    std::vector<IndexExpr> vec;
+    for (size_t i = 0; i < shape.size(); ++i) {
+        vec.push_back(shape[i]);
+    }
+    reporter->Assign(types[0], TensorType(Array<IndexExpr>(vec), DataType::Float(32)));
+    return true;
+}
+
+Expr MakeAcceleratorCall(String func, Array<Integer> shape) {
+    static const Op& op = Op::Get("accelerator_call");
+    auto attrs = make_object<AcceleratorCallAttrs>();
+    attrs->func_name = func;
+    attrs->output_shape = shape;
+    return Call(op, {}, Attrs(attrs), {});
+}
+
+TVM_REGISTER_GLOBAL("relay.op._make.accelerator_call").set_body_typed(MakeAcceleratorCall);
+
+// accelerator call
+RELAY_REGISTER_OP("accelerator_call")
+    .describe(R"code(Stub for accelerator call)code")
+    .set_num_inputs(0)
+    .set_attr<String>("AcceleratorFunc", "unknown")
+    .set_attr<Array<Integer>>("OutputShape", {})
+    .set_support_level(10)
+    .add_type_rel("AcceleratorCall", AcceleratorCallRel);
+
 RELAY_REGISTER_UNARY_OP("isnan")
     .describe(R"code(Returns whether the input contains any NaN, computed element-wise.
 .. math::
