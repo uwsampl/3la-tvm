@@ -50,12 +50,15 @@ ctx = tvm.cpu()
 runtime_exec = graph_runtime.create(graph, lib, ctx)
 
 coef = 1
-# x_np = coef * np.random.uniform(0, 1, size=(n, m)).astype(np.float32)
-# y_np = coef * np.random.uniform(0, 1, size=(n, m)).astype(np.float32)
-# z_np = coef * np.random.uniform(0, 1, size=(n,)).astype(np.float32)
-x_np = np.random.uniform(-2, 2, size=(n, m)).astype(dtype)
-y_np = np.random.uniform(-2, 2, size=(n, m)).astype(dtype)
-z_np = np.random.uniform(-2, 2, size=(n,)).astype(dtype)
+
+if dtype == "int8":
+    x_np = np.random.uniform(-128, 128, size=(n, m)).astype(dtype)
+    y_np = np.random.uniform(-128, 128, size=(n, m)).astype(dtype)
+    z_np = np.random.uniform(-128, 128, size=(n,)).astype(dtype)
+else:
+    x_np = coef * np.random.uniform(0, 1, size=(n, m)).astype(dtype)
+    y_np = coef * np.random.uniform(0, 1, size=(n, m)).astype(dtype)
+    z_np = coef * np.random.uniform(0, 1, size=(n,)).astype(dtype)
 
 
 ref = np.add(np.matmul(x_np, np.transpose(y_np)), z_np)
@@ -76,11 +79,11 @@ runtime_exec.set_input(**params)
 runtime_exec.run()
 
 output = runtime_exec.get_output(0).asnumpy()
-output = output.astype(np.float32)
+output = output.astype(dtype)
 print("[Python] Done")
 
 tl = tool()
-ref, bias = tl.get_adpfloat_bias(ref)
+# ref, bias = tl.get_adpfloat_bias(ref)
 err_out, err_ref = tl.cal_error(output, ref)
 # print(err_out, err_ref)
 print("relative error: {:5.5%} vs. output, {:5.5%} vs. ref".format(err_out, err_ref))
