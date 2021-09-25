@@ -133,9 +133,18 @@ class ILAFlexRuntime : public JSONRuntimeBase {
 
       // call ILAng-generated simulator
       std::stringstream call_builder;
-      call_builder << "python3 " << driver_dir << "/linear_layer_driver.py "
-                   << num_vector_in << " " << num_vector_out << " "
-                   << num_timestep << " " << is_bias << " " << symbol_name_;
+      // call_builder << "python3 " << driver_dir << "/linear_layer_driver.py "
+      //              << num_vector_in << " " << num_vector_out << " "
+      //              << num_timestep << " " << is_bias << " " << symbol_name_;
+      CHECK(node_data_x->dtype.code == 0 || node_data_x->dtype.code == 2) << "Unsupported datatype!";
+      std::string dtype = (node_data_x->dtype.code == 0) ? "int8" : "float32";
+      call_builder << "python3 " << driver_dir << "/linear_layer_driver.py" << " "
+                   << "--num_v_in " << num_vector_in << " "
+                   << "--num_v_out " << num_vector_out << " "
+                   << "--num_timestep " << num_timestep << " "
+                   << "--is_bias " << "True" << " "
+                   << "--dtype " << dtype << " "
+                   << "--op_name " << symbol_name_;
       std::string call_cmd = call_builder.str();
 
       LOG(INFO) << "calling flexnlp linear layer driver";
@@ -397,7 +406,8 @@ class ILAFlexRuntime : public JSONRuntimeBase {
         LOG(FATAL) << "wrong number of elements in the result tensor";
       }
       if (type_code == 0) {
-        data_ptr_int8[cntr] = lexical_cast<int8_t>(result_str);
+        int8_t tmp = lexical_cast<int>(result_str);
+        data_ptr_int8[cntr] = tmp;
       } else {
         data_ptr_f32[cntr] = lexical_cast<float>(result_str);
       }
