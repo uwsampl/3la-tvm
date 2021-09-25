@@ -13,6 +13,7 @@ from flexnlp.src.utils import tool
 #from utils import tool
 
 # define the graph
+# dtype="int8"
 dtype="float32"
 m = 64
 n = 64
@@ -48,17 +49,21 @@ from tvm.contrib import graph_runtime
 ctx = tvm.cpu()
 runtime_exec = graph_runtime.create(graph, lib, ctx)
 
-coef = 0.2
-x_np = coef * np.random.uniform(0, 1, size=(n, m)).astype(np.float32)
-y_np = coef * np.random.uniform(0, 1, size=(n, m)).astype(np.float32)
-z_np = coef * np.random.uniform(0, 1, size=(n,)).astype(np.float32)
+coef = 1
+# x_np = coef * np.random.uniform(0, 1, size=(n, m)).astype(np.float32)
+# y_np = coef * np.random.uniform(0, 1, size=(n, m)).astype(np.float32)
+# z_np = coef * np.random.uniform(0, 1, size=(n,)).astype(np.float32)
+x_np = np.random.uniform(-2, 2, size=(n, m)).astype(dtype)
+y_np = np.random.uniform(-2, 2, size=(n, m)).astype(dtype)
+z_np = np.random.uniform(-2, 2, size=(n,)).astype(dtype)
+
 
 ref = np.add(np.matmul(x_np, np.transpose(y_np)), z_np)
+print(ref)
 # x_np = coef * np.random.random_sample((n, m), dtype = np.float32)
 # x_np = np.array([[1, 2], [3, 4]], dtype = np.float32)
 # y_np = coef * np.random.random_sample((n, m), dtype = np.float32)
 # z_np = coef * np.random.random_sample((n,), dtype = np.float32)
-
 x_tvm = tvm.nd.array(x_np)
 y_tvm = tvm.nd.array(y_np)
 z_tvm = tvm.nd.array(z_np)
