@@ -2,6 +2,9 @@
 #include <tvm/runtime/registry.h>
 #include <tvm/support/json.hpp>
 
+#include <boost/numeric/conversion/cast.hpp>
+#include <boost/lexical_cast.hpp>
+
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
@@ -21,6 +24,9 @@ namespace contrib {
 
 using namespace tvm::runtime;
 using namespace tvm::runtime::json;
+
+using boost::lexical_cast;
+using boost::numeric_cast;
 
 class ILAFlexRuntime : public JSONRuntimeBase {
  public:
@@ -76,43 +82,27 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       CHECK(node_data_x->ndim == 2);
       auto x_dim_0 = node_data_x->shape[0];
       auto x_dim_1 = node_data_x->shape[1];
-      auto x_data_size = GetDataSize(*node_data_x)/sizeof(float);
-      float* x_data_ptr = new float[x_data_size];
-      std::copy(reinterpret_cast<float*>(node_data_x->data),
-                reinterpret_cast<float*>(node_data_x->data) + x_data_size,
-                x_data_ptr);
-
+      auto x_data_size = GetDataSize(*node_data_x)/(node_data_x->dtype.bits/8);
       // y
       auto eid_y = EntryID(input_nodes_[1], 0);
       auto& node_data_y = data_entry_[eid_y];
       CHECK(node_data_y->ndim == 2);
       auto y_dim_0 = node_data_y->shape[0];
       auto y_dim_1 = node_data_y->shape[1];
-      auto y_data_size = GetDataSize(*node_data_y)/sizeof(float);
-      float* y_data_ptr = new float[y_data_size];
-      std::copy(reinterpret_cast<float*>(node_data_y->data),
-                reinterpret_cast<float*>(node_data_y->data) + y_data_size,
-                y_data_ptr);
-
+      auto y_data_size = GetDataSize(*node_data_y)/(node_data_y->dtype.bits/8);
       // z
       auto eid_z = EntryID(input_nodes_[2], 0);
       auto& node_data_z = data_entry_[eid_z];
       CHECK(node_data_z->ndim == 1);
       auto z_dim_0 = node_data_z->shape[0];
-      auto z_data_size = GetDataSize(*node_data_z)/sizeof(float);
-      float* z_data_ptr = new float[z_data_size];
-      std::copy(reinterpret_cast<float*>(node_data_z->data),
-                reinterpret_cast<float*>(node_data_z->data) + z_data_size,
-                z_data_ptr);
-
+      auto z_data_size = GetDataSize(*node_data_z)/(node_data_z->dtype.bits/8);
       // output
       auto eid_o = outputs_[0].id_;
       auto node_data_o = data_entry_[eid_o];
       CHECK(node_data_o->ndim == 2);
       auto o_dim_0 = node_data_o->shape[0];
       auto o_dim_1 = node_data_o->shape[1];
-      auto o_data_size = GetDataSize(*node_data_o)/sizeof(float);
-      float* o_data_ptr = new float[o_data_size];
+      auto o_data_size = GetDataSize(*node_data_o)/(node_data_o->dtype.bits/8);
 
       /* TODO
        *  - FlexNLP ILA simulator is available in $PATH as "flexnlp_ila_sim"
@@ -124,9 +114,9 @@ class ILAFlexRuntime : public JSONRuntimeBase {
        */
       // dump data to files
       std::system("mkdir -p data");
-      dump_data(x_data_ptr, x_data_size, "./data/inp.txt");
-      dump_data(y_data_ptr, y_data_size, "./data/wgt.txt");
-      dump_data(z_data_ptr, z_data_size, "./data/bias.txt");
+      dump_data(node_data_x->data, x_data_size, "./data/inp.txt", node_data_x->dtype.code);
+      dump_data(node_data_y->data, y_data_size, "./data/wgt.txt", node_data_x->dtype.code);
+      dump_data(node_data_z->data, z_data_size, "./data/bias.txt", node_data_x->dtype.code);
 
       // calculate flexnlp tensor assembly parameters;
       CHECK(x_dim_1 % 16 == 0) "linear_layer input timestep size is: " << x_dim_1;
@@ -153,7 +143,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       CHECK(res == 0) << "Error executing simulator " << call_cmd;
 
       // retrieve the results
-      retrieve_result(o_data_ptr, o_data_size, "./data/result.txt");
+      retrieve_result(node_data_o->data, o_data_size, "./data/result.txt", node_data_o->dtype.code);
 #if 0
       LOG(INFO) << "x_dimension: " << x_dim_0 << ", " << x_dim_1;
       LOG(INFO) << "x_data_size: " << x_data_size;
@@ -163,10 +153,6 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       LOG(INFO) << "z_data_size: " << z_data_size;
       LOG(INFO) << o_dim_0 << ", " << o_dim_1;
 #endif
-
-      // copy the result and resume
-      std::copy(o_data_ptr, o_data_ptr + o_data_size,
-                reinterpret_cast<float*>(node_data_o->data));
 
     } 
     else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilaflex.lstm") {
@@ -307,29 +293,42 @@ class ILAFlexRuntime : public JSONRuntimeBase {
     LOG(INFO) << "[Runtime] exit " << symbol_name_ << " runtime, resume host";
   }
 
-  void dump_data(float* data_ptr, unsigned long& size, std::string path) {
+  void dump_data(void* data_ptr, unsigned long& size, std::string path, uint8_t type_code = 2) {
     std::ofstream fout;
     std::stringstream ss;
     fout.open(path, std::ios::out | std::ios::trunc);
+    // cast the data ptr to the correct datatype according to the type_code
+    auto data_ptr_int8 = reinterpret_cast<int8_t*>(data_ptr);
+    auto data_ptr_f32 = reinterpret_cast<float*>(data_ptr);
     for (auto i = 0; i < size; ++i) {
-      ss << data_ptr[i] << '\n';
+      if (type_code == 0) {
+        ss << (signed)data_ptr_int8[i] << '\n';
+      } else {
+        ss << data_ptr_f32[i] << '\n';
+      }
     }
     fout << ss.rdbuf();
     fout.close();
   }
 
-  void retrieve_result(float* data_ptr, unsigned long& size, std::string path) {
+  void retrieve_result(void* data_ptr, unsigned long& size, std::string path, uint8_t type_code = 2) {
     // retrieve flexnlp results
     std::ifstream fin;
     fin.open(path, std::ios::in);
-    std::string float_str;
+    std::string result_str;
     unsigned long cntr = 0;
+    auto data_ptr_int8 = reinterpret_cast<int8_t*>(data_ptr);
+    auto data_ptr_f32 = reinterpret_cast<float*>(data_ptr);
 
-    while(std::getline(fin, float_str)) {
+    while(std::getline(fin, result_str)) {
       if (cntr >= size) {
         LOG(FATAL) << "wrong number of elements in the result tensor";
       }
-      data_ptr[cntr] = std::stof(float_str);
+      if (type_code == 0) {
+        data_ptr_int8[cntr] = lexical_cast<int8_t>(result_str);
+      } else {
+        data_ptr_f32[cntr] = lexical_cast<float>(result_str);
+      }
       ++cntr;
     }
   }
