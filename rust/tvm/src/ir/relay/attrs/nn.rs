@@ -61,6 +61,7 @@ pub struct Conv2DAttrsNode {
     pub data_layout: TString,
     pub kernel_layout: TString,
     pub out_layout: TString,
+    pub auto_scheduler_rewritten_layout: TString,
     pub out_dtype: DataType,
 }
 
