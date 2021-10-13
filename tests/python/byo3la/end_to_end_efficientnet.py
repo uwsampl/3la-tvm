@@ -14,6 +14,8 @@ from tvm.relay.op.contrib import ilacnn
 
 from EfficientNet.efficientnet_model import get_efficientnet
 
+from tvm.relay.testing import count_all_ops, count_all_overloads, count_all_ops_in_overloads
+
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 ENET_DIR = os.path.join(TEST_DIR, "EfficientNet")
 PARAMS_FILE = os.path.join(ENET_DIR, "0.3358-imagenet-efficientnet-b0-47-best.params")
@@ -37,11 +39,17 @@ def main():
     params["data"] = tvm.nd.array(np.random.rand(1, 3, 224, 224).astype("float32"))
     args = [params[var.name_hint] for var in mod["main"].params]
     mod["main"] = ilacnn.remove_padding(mod["main"])
+    # commented out because it blows up the model too much and makes compilation take over an hour
+    # mod["main"] = ilacnn.remove_grouping(mod["main"])
 
     pattern_table = ilacnn.pattern_table()
     mod = tvm.relay.transform.MergeComposite(pattern_table)(mod)
     mod = tvm.relay.transform.AnnotateTarget(["ilacnn"])(mod)
     mod = tvm.relay.transform.PartitionGraph()(mod)
+
+    print(f"All ops: {count_all_ops(mod)}")
+    print(f"All overloads: {count_all_overloads(mod)}")
+    print(f"All ops in overloads: {count_all_ops_in_overloads(mod)}")
 
     with tvm.transform.PassContext(opt_level=3):
         device = tvm.cpu()
