@@ -126,10 +126,10 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       void* x_data_ext_ptr;
       void* y_data_ext_ptr;
       void* z_data_ext_ptr;
-      int64_t x_dim_1_ext = ceil(x_dim_1 / 16) * 16;
-      int64_t y_dim_0_ext = (ceil(y_dim_0 / 64) * 64);
-      int64_t y_dim_1_ext = (ceil(y_dim_1 / 16) * 16);
-      int64_t z_dim_0_ext = ceil(z_dim_0 / 64) * 64;
+      int64_t x_dim_1_ext = ceil((double)x_dim_1 / 16) * 16;
+      int64_t y_dim_0_ext = (ceil((double)y_dim_0 / 64) * 64);
+      int64_t y_dim_1_ext = (ceil((double)y_dim_1 / 16) * 16);
+      int64_t z_dim_0_ext = ceil((double)z_dim_0 / 64) * 64;
 
       int64_t x_data_ext_size = x_dim_0 * x_dim_1_ext;
       int64_t y_data_ext_size = y_dim_0_ext * y_dim_1_ext; 
@@ -409,6 +409,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
     int64_t ext_dim_1, const int64_t ori_dim_0, const int64_t ori_dim_1, uint8_t dbyte) {
     // This function pad the 2D tensor data in the given dimension
     auto ext_size = ext_dim_0 * ext_dim_1;
+    std::cout << "[extend_data_2d] " << ext_dim_0 << '\t' << ext_dim_1 << '\t' << ext_size << std::endl;
     ext_data_ptr = std::calloc(ext_size, dbyte);
     for (auto i = 0; i < ori_dim_0; i++) {
       std::memcpy(
