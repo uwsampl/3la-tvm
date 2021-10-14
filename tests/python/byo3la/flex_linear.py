@@ -15,7 +15,7 @@ from flexnlp.src.utils import tool
 # define the graph
 # dtype="int8"
 dtype="float32"
-p = 16
+p = 1
 m = 16
 n = 10
 
@@ -72,7 +72,7 @@ else:
 
 
 ref = np.add(np.matmul(x_np, np.transpose(y_np)), z_np)
-print(ref)
+# print(ref)
 x_tvm = tvm.nd.array(x_np)
 y_tvm = tvm.nd.array(y_np)
 z_tvm = tvm.nd.array(z_np)
@@ -91,8 +91,8 @@ print("[Python] Done")
 tl = tool()
 err_out, err_ref = tl.cal_error(output, ref)
 print("relative error: {:5.5%} vs. output, {:5.5%} vs. ref".format(err_out, err_ref))
-print('output: {}'.format(output.shape))
-print(output)
+# print('output: {}'.format(output.shape))
+# print(output)
 print('===============')
-print('ref: {}'.format(ref.shape))
-print(ref)
+# print('ref: {}'.format(ref.shape))
+# print(ref)
