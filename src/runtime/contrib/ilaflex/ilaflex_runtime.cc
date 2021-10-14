@@ -14,6 +14,7 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <math.h>
 
 #include "../json/json_node.h"
 #include "../json/json_runtime.h"
@@ -82,29 +83,36 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       auto eid_x = EntryID(input_nodes_[0], 0);
       auto& node_data_x = data_entry_[eid_x];
       CHECK(node_data_x->ndim == 2);
-      auto x_dim_0 = node_data_x->shape[0];
-      auto x_dim_1 = node_data_x->shape[1];
+      int64_t x_dim_0 = node_data_x->shape[0];
+      int64_t x_dim_1 = node_data_x->shape[1];
       auto x_data_size = GetDataSize(*node_data_x)/(node_data_x->dtype.bits/8);
+      CHECK(x_data_size == x_dim_0 * x_dim_1) "wrong input data size";
       // y
       auto eid_y = EntryID(input_nodes_[1], 0);
       auto& node_data_y = data_entry_[eid_y];
       CHECK(node_data_y->ndim == 2);
-      auto y_dim_0 = node_data_y->shape[0];
-      auto y_dim_1 = node_data_y->shape[1];
+      int64_t y_dim_0 = node_data_y->shape[0];
+      int64_t y_dim_1 = node_data_y->shape[1];
       auto y_data_size = GetDataSize(*node_data_y)/(node_data_y->dtype.bits/8);
+      CHECK(y_data_size == y_dim_0 * y_dim_1) "wrong weights data size";
       // z
       auto eid_z = EntryID(input_nodes_[2], 0);
       auto& node_data_z = data_entry_[eid_z];
       CHECK(node_data_z->ndim == 1);
-      auto z_dim_0 = node_data_z->shape[0];
+      int64_t z_dim_0 = node_data_z->shape[0];
       auto z_data_size = GetDataSize(*node_data_z)/(node_data_z->dtype.bits/8);
+      CHECK(z_data_size == z_dim_0) "wrong bias data size";
       // output
       auto eid_o = outputs_[0].id_;
       auto node_data_o = data_entry_[eid_o];
       CHECK(node_data_o->ndim == 2);
-      auto o_dim_0 = node_data_o->shape[0];
-      auto o_dim_1 = node_data_o->shape[1];
+      int64_t o_dim_0 = node_data_o->shape[0];
+      int64_t o_dim_1 = node_data_o->shape[1];
       auto o_data_size = GetDataSize(*node_data_o)/(node_data_o->dtype.bits/8);
+      CHECK(o_dim_0 == x_dim_0);
+      CHECK(o_dim_1 == y_dim_0);
+      CHECK(o_data_size == o_dim_0 * o_dim_1);
+
 
       /* TODO
        *  - FlexNLP ILA simulator is available in $PATH as "flexnlp_ila_sim"
@@ -114,19 +122,39 @@ class ILAFlexRuntime : public JSONRuntimeBase {
        *  - invoke the ILA simulator
        *  - read back the result and store to o_data_ptr
        */
+      // pad the data if shape doesn't align
+      void* x_data_ext_ptr;
+      void* y_data_ext_ptr;
+      void* z_data_ext_ptr;
+      int64_t x_dim_1_ext = ceil(x_dim_1 / 16) * 16;
+      int64_t y_dim_0_ext = (ceil(y_dim_0 / 64) * 64);
+      int64_t y_dim_1_ext = (ceil(y_dim_1 / 16) * 16);
+      int64_t z_dim_0_ext = ceil(z_dim_0 / 64) * 64;
+
+      int64_t x_data_ext_size = x_dim_0 * x_dim_1_ext;
+      int64_t y_data_ext_size = y_dim_0_ext * y_dim_1_ext; 
+      int64_t z_data_ext_size = z_dim_0_ext;
+      x_data_ext_ptr = extend_data_2d(node_data_x->data, x_data_ext_ptr, x_dim_0, x_dim_1_ext, 
+                                      x_dim_0, x_dim_1, node_data_x->dtype.bits/8);
+      y_data_ext_ptr = extend_data_2d(node_data_y->data, y_data_ext_ptr, y_dim_0_ext, y_dim_1_ext, 
+                                      y_dim_0, y_dim_1, node_data_y->dtype.bits/8);
+      z_data_ext_ptr = extend_data_2d(node_data_z->data, z_data_ext_ptr, z_dim_0_ext, 1,
+                                      z_dim_0, 1, node_data_z->dtype.bits/8);
+      // declare pointer and space for the output
+      auto o_data_ext_size = x_dim_0 * y_dim_0_ext;
+      void* o_data_ext_ptr = std::calloc(o_data_ext_size, node_data_o->dtype.bits/8);
+    
       // dump data to files
       std::system("mkdir -p data");
-      dump_data(node_data_x->data, x_data_size, "./data/inp.txt", node_data_x->dtype.code);
-      dump_data(node_data_y->data, y_data_size, "./data/wgt.txt", node_data_x->dtype.code);
-      dump_data(node_data_z->data, z_data_size, "./data/bias.txt", node_data_x->dtype.code);
+      std::cout << "dumping data" << std::endl;
+      dump_data(x_data_ext_ptr, x_data_ext_size, "./data/inp.txt", node_data_x->dtype.code);
+      dump_data(y_data_ext_ptr, y_data_ext_size, "./data/wgt.txt", node_data_y->dtype.code);
+      dump_data(z_data_ext_ptr, z_data_ext_size, "./data/bias.txt", node_data_z->dtype.code);
 
-      // calculate flexnlp tensor assembly parameters;
-      CHECK(x_dim_1 % 16 == 0) "linear_layer input timestep size is: " << x_dim_1;
-      CHECK(y_dim_0 % 16 == 0) "linear_layer output timestep size is: " << y_dim_0;
-      CHECK(z_dim_0 % 16 == 0) "linear_layer bias size is: " << z_dim_0;
-      CHECK(y_dim_0 == z_dim_0) "linear_layer bias size different from output timestep size";
-      int num_vector_in = x_dim_1/16;
-      int num_vector_out = y_dim_0/16;
+      // int num_vector_in = x_dim_1/16;
+      // int num_vector_out = y_dim_0/16;
+      int num_vector_in = x_dim_1_ext / 16;
+      int num_vector_out = y_dim_0_ext / 16;
       int num_timestep = x_dim_0;
       int is_bias = 1;
       CHECK(num_vector_out % 4 == 0) "linear_layer output vector number is : " << num_vector_out;
@@ -153,8 +181,11 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       end_time = std::chrono::high_resolution_clock::now();
       CHECK(res == 0) << "Error executing simulator " << call_cmd;
 
-      // retrieve the results
-      retrieve_result(node_data_o->data, o_data_size, "./data/result.txt", node_data_o->dtype.code);
+      // retrieve the results, retrieve to the extended buffer first
+      // retrieve_result(node_data_o->data, o_data_size, "./data/result.txt", node_data_o->dtype.code);
+      retrieve_result(o_data_ext_ptr, o_data_ext_size, "./data/result.txt", node_data_o->dtype.code);
+      unpad_result_2d(node_data_o->data, o_data_ext_ptr, x_dim_0, y_dim_0_ext, 
+                      o_dim_0, o_dim_1, node_data_o->dtype.bits/8);
 #if 0
       LOG(INFO) << "x_dimension: " << x_dim_0 << ", " << x_dim_1;
       LOG(INFO) << "x_data_size: " << x_data_size;
@@ -374,25 +405,52 @@ class ILAFlexRuntime : public JSONRuntimeBase {
     LOG(INFO) << "[Runtime] exit " << symbol_name_ << " runtime, resume host";
   }
 
-  void dump_data(void* data_ptr, unsigned long& size, std::string path, uint8_t type_code = 2) {
+  void* extend_data_2d(void *ori_data_ptr, void *ext_data_ptr, int64_t ext_dim_0,
+    int64_t ext_dim_1, const int64_t ori_dim_0, const int64_t ori_dim_1, uint8_t dbyte) {
+    // This function pad the 2D tensor data in the given dimension
+    auto ext_size = ext_dim_0 * ext_dim_1;
+    ext_data_ptr = std::calloc(ext_size, dbyte);
+    for (auto i = 0; i < ori_dim_0; i++) {
+      std::memcpy(
+        ext_data_ptr + i * ext_dim_1 * dbyte,
+        ori_data_ptr + i * ori_dim_1 * dbyte,
+        ori_dim_1 * dbyte
+      );
+    }
+    return ext_data_ptr;
+  }
+
+  void unpad_result_2d(void *ori_data_ptr, void *ext_data_ptr, int64_t ext_dim_0,
+    int64_t ext_dim_1, const int64_t ori_dim_0, const int64_t ori_dim_1, uint8_t dbyte) {
+    // This function unpads the final results
+    std::cout << "unpad the result 2D data (ext_dim_0, ext_dim_1) - " 
+              << ext_dim_0 << '\t' << ext_dim_1 << std::endl;
+    for (auto i = 0; i < ori_dim_0; i++) {
+      std::memcpy(
+        ori_data_ptr + i * ori_dim_1 * dbyte,
+        ext_data_ptr + i * ext_dim_1 * dbyte,
+        ori_dim_1 * dbyte
+      );
+    }
+  }
+
+  void dump_data(void* data_ptr, unsigned long size, std::string path, uint8_t type_code = 2) {
     std::ofstream fout;
     std::stringstream ss;
     fout.open(path, std::ios::out | std::ios::trunc);
     // cast the data ptr to the correct datatype according to the type_code
-    auto data_ptr_int8 = reinterpret_cast<int8_t*>(data_ptr);
-    auto data_ptr_f32 = reinterpret_cast<float*>(data_ptr);
     for (auto i = 0; i < size; ++i) {
       if (type_code == 0) {
-        ss << (signed)data_ptr_int8[i] << '\n';
+        ss << (signed)*((int8_t*)data_ptr + i) << '\n';
       } else {
-        ss << data_ptr_f32[i] << '\n';
+        ss << *((float*)data_ptr + i) << '\n';
       }
     }
     fout << ss.rdbuf();
     fout.close();
   }
 
-  void retrieve_result(void* data_ptr, unsigned long& size, std::string path, uint8_t type_code = 2) {
+  void retrieve_result(void* data_ptr, unsigned long size, std::string path, uint8_t type_code = 2) {
     // retrieve flexnlp results
     std::ifstream fin;
     fin.open(path, std::ios::in);
