@@ -47,8 +47,9 @@ class ILAVTARuntime : public JSONRuntimeBase {
     auto call_node = nodes_[outputs_[0].id_];
     auto op_name = call_node.GetOpName();
     int64_t sim_time = -1;
-    if (op_name != "ilavta.dense" && op_name != "ilavta.bias_add" && op_name != "ilavta.relu") {
-      LOG(FATAL) << "Unknown pattern " << symbol_name_;
+    if (op_name != "ilavta.dense" && op_name != "ilavta.bias_add"
+     && op_name != "ilavta.relu" && op_name != "ilavta.conv1d") {
+      LOG(FATAL) << "Unknown pattern " << symbol_name_ << " " << op_name;
     }
 
     if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.dense") {
@@ -284,6 +285,69 @@ class ILAVTARuntime : public JSONRuntimeBase {
       VTAMemFree(uop_buf);
 
       sim_time = runSimGetData("ilavta_relu", driver_dir, ila_asm, data_dump, output_buffer_size, n_inp_rows, n_inp_cols, output_data->data, dtype);
+    } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.conv1d") {
+      auto input_eid = EntryID(input_nodes_[0], 0);
+      auto& input_node_data = data_entry_[input_eid];
+
+      auto wgt_eid = EntryID(input_nodes_[1], 0);
+      auto& wgt_node_data = data_entry_[wgt_eid];
+
+      auto output_data = data_entry_[outputs_[0].id_];
+
+      int N = input_node_data->shape[0];
+      int C = input_node_data->shape[1];
+      int W = input_node_data->shape[2];
+
+      int O = wgt_node_data->shape[0];
+      int I = wgt_node_data->shape[1];
+      int wgtW = wgt_node_data->shape[2];
+      int vec_width = I * wgtW;
+
+      CHECK(I == C) << "C != I: this should not be type checked";
+
+      uint8_t* input_data = reinterpret_cast<uint8_t*>(input_node_data->data);
+      uint8_t* wgt_data   = reinterpret_cast<uint8_t*>(wgt_node_data->data);
+
+      uint8_t* data_col = reinterpret_cast<uint8_t*>(malloc(sizeof(uint8_t) * N * I * wgtW * (W - wgtW + 1)));
+      int ptr = 0;
+      int vec_cnt = 0;
+      for (int batch = 0; batch < N; ++batch) {
+        int start_offset = batch * C * W;
+        for (int i = start_offset; i < start_offset + W - wgtW; ++i) {
+          vec_cnt += 1;
+          // flatten the current window in input to a vector
+          for (int row = 0; row < I; ++row) {
+            for (int col = 0; col < wgtW; ++col) {
+              CHECK(ptr < N * I * wgtW * (W - wgtW + 1));
+              data_col[ptr++] = input_data[i + row * W + col];
+            }
+          }
+        }
+      }
+      VTAUop* uop_buf   = getGEMMUops(vec_cnt / VTA_BATCH, vec_width / VTA_BLOCK_IN, O / VTA_BLOCK_OUT);
+
+      std::string data_file = dump_datafile(data_col, N * I * wgtW * (W - wgtW + 1),
+                                            wgt_data, O * vec_width,
+                                            nullptr, 0, uop_buf,
+                                            vec_cnt / VTA_BATCH * vec_width / VTA_BLOCK_IN * O / VTA_BLOCK_OUT,
+                                            "ilavta_conv1d");
+      std::string ila_asm   = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
+      auto dtype            = DLDataType2String(output_data->dtype);
+      sim_time = runSimGetData("ilavta_conv1d", driver_dir, ila_asm, data_file, GetDataSize(*output_data), vec_cnt, O, output_data->data, dtype);
+      // uint8_t* out_data = reinterpret_cast<uint8_t*>(malloc(sizeof(uint8_t) * GetDataSize(*output_data)));
+      // uint8_t* raw_data = reinterpret_cast<uint8_t*>(output_data->data);
+      // ptr = 0;
+      // for (int batch = 0; batch < N; ++batch) {
+      //   int start_offset = batch * O * (W - wgtW + 1);
+      //   for (int n_kernel = 0; n_kernel < O; ++n_kernel) {
+      //     for (int ncol = 0; ncol < W  - wgtW + 1; ++ncol) {
+      //       out_data[ptr++] = raw_data[start_offset + n_kernel + ncol * O];
+      //     }
+      //   }
+      // }
+      // for (int i = 0; i < ptr; ++i) {
+      //   raw_data[i] = out_data[i];
+      // }
     }
     std::ifstream fin(wall_clock_file);
     nlohmann::json wall_clock_data = nlohmann::json::parse(fin);

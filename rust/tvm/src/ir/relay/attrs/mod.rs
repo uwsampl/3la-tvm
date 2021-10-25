@@ -19,3 +19,4 @@
 
 pub mod nn;
 pub mod transform;
+pub mod reduce;

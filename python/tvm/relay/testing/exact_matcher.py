@@ -9,7 +9,7 @@ from tvm.relay.expr_functor import ExprFunctor, ExprMutator
 from tvm.relay.analysis import free_vars, bound_vars
 
 # dumb copy of what src/relay/transforms/de_duplicate.cc is doing
-def deduplicate_vars(expr):
+def deduplicate_vars(expr, var_map={}, use_original=False):
     """
     Given the expr, replace all vars in the expression with fresh ones.
     This is done to preserve well-formedness in Relay (all var definitions must be unique)
@@ -17,12 +17,14 @@ def deduplicate_vars(expr):
     class Deduplicator(ExprMutator):
         def __init__(self):
             super().__init__()
-            self.var_map = {}
+            self.var_map = var_map.copy()
 
         def visit_var(self, var):
             if var in self.var_map:
                 return self.var_map[var]
-            fresh_var = relay.Var(var.name_hint, type_annotation=var.type_annotation)
+            if use_original:
+                return var
+            fresh_var = relay.Var(var.name_hint)
             self.var_map[var] = fresh_var
             return fresh_var
 
@@ -45,6 +47,20 @@ def deduplicate_vars(expr):
             clauses = [relay.Clause(self.visit_pattern(c.lhs), self.visit(c.rhs))
                        for c in match.clauses]
             return relay.Match(new_val, clauses)
+
+        def visit_function(self, func):
+            args = list(map(self.visit, func.params))
+            body = self.visit(func.body)
+            return relay.Function(args, body, func.ret_type, func.type_params)
+
+        def visit_let(self, let_expr):
+            new_var = self.visit(let_expr.var)
+            new_body = self.visit(let_expr.body)
+            new_value = self.visit(let_expr.value)
+            # if isinstance(let_expr.value, relay.Function):
+            #     print(let_expr.var, let_expr.value)
+            #     print(new_value)
+            return relay.Let(new_var, new_value, new_body)
 
     dedup = Deduplicator()
     return dedup.visit(expr)
@@ -286,6 +302,20 @@ class MatchMutator(ExprMutator):
         self.compiler_name = compiler_name
         self.composite_name = composite_name
         self.composite_counter = composite_counter
+    
+    def to_key(self, relay_var):
+        def hash_type(relay_type):
+            {
+                tvm.ir.type.PrimType:      lambda: relay_type.dtype,
+                tvm.ir.type.PointerType:   lambda: hash_type(relay_type.element_type),
+                tvm.ir.type.TypeVar:       lambda: (relay_type.name_hint, relay_type.kind),
+                tvm.ir.type.GlobalTypeVar: lambda: (relay_type.name_hint, relay_type.kind),
+                tvm.ir.type.TupleType:     lambda: tuple(map(hash_type, relay_type.fields)),
+                tvm.ir.type.FuncType:      lambda: (tuple(map(hash_type, relay_type.arg_types)), hash_type(relay_type.ret_type)),
+                tvm.ir.type.IncompleteType:lambda: relay_type.kind,
+                tvm.ir.type.RelayRefType:  lambda: hash_type(relay_type.value),
+                }.get(type(relay_type), lambda: None)()
+        return (relay_var.name_hint, hash_type(relay_var.type_annotation))
 
     def extract_target(self, match_args):
         """
@@ -305,17 +335,22 @@ class MatchMutator(ExprMutator):
             })(a1, ..., an)
         })(match_args[0], ..., match_args[n-1])
         """
-        assert all(map(lambda v: v in match_args, self.target_vars))
-        match_ordering = [match_args[v] for v in self.target_vars]
+        # print(f'======={self.composite_counter}=======')
+        assert all(map(lambda v: self.to_key(v) in match_args, self.target_vars))
+        match_ordering = [match_args[v] for v in map(self.to_key, self.target_vars)]
 
         # we have to deduplicate vars for Relay's well-formedness check
         # (all var definitions must be unique)
         inner_body = deduplicate_vars(self.target)
-        inner_args = free_vars(inner_body)
-        inner_func = relay.Function(inner_args, inner_body)
+        inner_free_vars = free_vars(inner_body)
+        # inner_args = list(map(lambda v: relay.Var(v.name_hint, match_args[self.to_key(v)].checked_type), inner_free_vars))
+        inner_args_map = {}
+        for var in inner_free_vars:
+            inner_args_map[var] = relay.Var(var.name_hint + str(self.composite_counter), match_args[self.to_key(var)].checked_type)
+        inner_body_rewritten = deduplicate_vars(inner_body, var_map=inner_args_map, use_original=True)
+        inner_func = relay.Function(list(map(inner_args_map.get, inner_free_vars)), inner_body_rewritten)
         inner_func = inner_func.with_attr("Composite", self.composite_name)
-
-        outer_args = [relay.Var(f"outer_arg_{i}") for i in range(len(inner_args))]
+        outer_args = [relay.Var(f"outer_arg_{i}") for i in range(len(inner_free_vars))]
         outer_func = relay.Function(outer_args, inner_func(*outer_args))
         outer_func = outer_func.with_attr("Compiler", self.compiler_name)
         outer_func = outer_func.with_attr("Primitive", tvm.tir.IntImm("int32", 1))
@@ -323,7 +358,7 @@ class MatchMutator(ExprMutator):
             "global_symbol",
             f"{self.composite_name}_{self.composite_counter}")
         self.composite_counter += 1
-        return outer_func(*match_ordering)
+        return outer_func(*match_ordering) 
 
     def visit(self, expr):
         """
@@ -339,7 +374,7 @@ class MatchMutator(ExprMutator):
         found_match, match_args = check_match(self.target, expr)
         if found_match:
             # need to check for matches in the match args too
-            final_args = {var: self.visit(arg) for var, arg in match_args.items()}
+            final_args = {self.to_key(var): self.visit(arg) for var, arg in match_args.items()}
             return self.extract_target(final_args)
         return super().visit(expr)
 

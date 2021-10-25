@@ -36,13 +36,15 @@ class ILAFlexRuntime : public JSONRuntimeBase {
 
   void Run() override {
     CHECK(symbol_name_.substr(0, 7) == "ilaflex") << symbol_name_;
-    LOG(INFO) << "[Runtime] entering " << symbol_name_ << " runtime";
+    LOG(INFO) << "[Runtime] enter " << symbol_name_ << " runtime";
 
     // TODO: we should probably package up all the files inside TVM
     // to avoid having to refer to other directories
     std::string driver_dir = getenv("PY_3LA_DRIVER");
+    driver_dir += "/flexnlp"; 
+    // LOG(INFO) << "[Runtime] operator name is " << nodes_[outputs_[0].id_].GetOpName();
+    // LOG(INFO) << "outputs size: " << outputs_.size() << '\t' << "input_size: " << input_nodes_.size();
 
-    driver_dir += "flexnlp"; 
     auto op_name = nodes_[outputs_[0].id_].GetOpName();
     const std::string wall_clock_file = "ilaflex_wallclock.json";
     std::chrono::_V2::system_clock::time_point start_time;
@@ -289,8 +291,78 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       // copy the result and resume
       std::copy(o_data_ptr, o_data_ptr + o_data_size,
                 reinterpret_cast<float*>(node_data_o->data));
+    } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilaflex.attention") {
+      LOG(INFO) << "[Runtime] operator name is " << nodes_[outputs_[0].id_].GetOpName();
+      // dec_data
+      auto eid_dec = EntryID(input_nodes_[0], 0);
+      auto& node_data_dec = data_entry_[eid_dec];
+      // CHECK(node_data_inp->ndim == 3);
+      // auto num_ts = node_data_inp->shape[1];
+      // CHECK(node_data_inp->shape[2] % 16 == 0);
+      auto num_v_in = (int)(node_data_dec->shape[2])/16;
+      auto dec_data_size = GetDataSize(*node_data_dec)/sizeof(float);
+      float* inp_data_ptr = new float[dec_data_size];
+      std::copy(reinterpret_cast<float*>(node_data_dec->data),
+                reinterpret_cast<float*>(node_data_dec->data) + dec_data_size,
+                inp_data_ptr);
+
+      // attention enc_data
+      auto eid_enc_data = EntryID(input_nodes_[1], 0);
+      auto& enc_data = data_entry_[eid_enc_data];
+      auto num_ts = enc_data->shape[1];
+      auto enc_data_size = GetDataSize(*enc_data)/sizeof(float);
+      float* enc_data_ptr = new float[enc_data_size];
+      std::copy(reinterpret_cast<float*>(enc_data->data),
+                reinterpret_cast<float*>(enc_data->data) + enc_data_size,
+                enc_data_ptr);
+
+      auto node_data_o = data_entry_[EntryID(outputs_[0])];
+      auto o_data_size = GetDataSize(*node_data_o)/sizeof(float);
+      float* o_data_ptr = new float[o_data_size];
+
+      /* TODO
+       *  - FlexNLP ILA simulator is available in $PATH as "flexnlp_ila_sim"
+       *  - generate tensor-level assembly
+       *  - generate data library
+       *  - translate to ILA instruction program fragment
+       *  - invoke the ILA simulator
+       *  - read back the result and store to o_data_ptr
+       */
+      // dump data to files
+      std::system("mkdir -p data");
+      dump_data(inp_data_ptr, dec_data_size, "./data/dec.txt");
+      dump_data(enc_data_ptr, enc_data_size, "./data/enc.txt");
+
+      // set flexnlp tensor assembly parameters;
+      int mem_idx_enc = 0;
+      int mem_idx_dec = 0;
+
+      std::cerr << "dec shape: (" << node_data_dec->shape[0] << ", " << node_data_dec->shape[1] << ", " << node_data_dec->shape[2] << ")\n";
+      std::cerr << "num_v_in: " << num_v_in << "\n";
+      std::cerr << "enc shape: (" << enc_data->shape[0] << ", " << enc_data->shape[1] << ", " << enc_data->shape[2] << ")\n";
+      std::cerr << "num_ts: " << num_ts << "\n";
+
+      // call ILAng-generated simulator
+      std::stringstream call_builder;
+      call_builder << "python3 " << driver_dir << "/attention_driver.py "
+                   << "--num_ts " << num_ts << " --num_v " << num_v_in << " --mem_idx_enc "
+                   << mem_idx_enc << " --mem_idx_dec " << mem_idx_dec;
+      std::string call_cmd = call_builder.str();
+      // std::cerr << "calling " << call_cmd << "\n";
+
+      LOG(INFO) << "calling flexnlp attention driver";
+      start_time = std::chrono::high_resolution_clock::now();
+      auto res = std::system(call_cmd.c_str());
+      end_time = std::chrono::high_resolution_clock::now();
+      CHECK(res == 0) << "Error executing simulator " << call_cmd;
+
+      // retrieve the results
+      retrieve_result(o_data_ptr, o_data_size, "./data/result_attention_ila.txt");
+      // copy the result and resume
+      std::copy(o_data_ptr, o_data_ptr + o_data_size,
+                reinterpret_cast<float*>(node_data_o->data));
     } else {
-      LOG(FATAL) << "Unknown pattern " << symbol_name_;
+      LOG(FATAL) << "Unknown pattern " << outputs_.size() << " " << nodes_[outputs_[0].id_].GetOpName();
     }
     std::ifstream fin(wall_clock_file);
     nlohmann::json wall_clock_data = nlohmann::json::parse(fin);

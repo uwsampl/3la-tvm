@@ -44,7 +44,8 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
       CHECK(comp.defined())
           << "JSON runtime only supports composite functions.";
       name = comp.value();
-      if (!(name == "ilavta.conv2d" || name == "ilavta.bias_add" || name == "ilavta.dense" || name == "ilavta.relu")) {
+      if (!(name == "ilavta.conv2d" || name == "ilavta.bias_add"
+            || name == "ilavta.dense" || name == "ilavta.relu" || name == "ilavta.conv1d")) {
         LOG(FATAL) << "Unrecognized pattern: " << name;
       }
       if (name == "ilavta.dense") {
@@ -57,6 +58,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
         int info[] = {batch, n_inp_cols, n_wgt_rows};
         filename = GetCompiledFilename("dense", info, 3);
         if (this->compiled_func.find(filename) == this->compiled_func.end()) {
+          this->compiled_func.insert(filename);
           filename = CompileGEMM(batch, n_inp_cols, n_wgt_rows, "./prog_frag/" + filename);
         }
       }  else if (name == "ilavta.bias_add") {
@@ -67,6 +69,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
         int info[] = {batch, n_feat};
         filename = GetCompiledFilename("bias_add", info, 2);
         if (this->compiled_func.find(filename) == this->compiled_func.end()) {
+          this->compiled_func.insert(filename);
           filename = CompilBiasAdd(batch, n_feat, "./prog_frag/" + filename);
         }
       } else if (name == "ilavta.relu") {
@@ -77,7 +80,27 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
         int info[] = {batch, n_feat};
         filename = GetCompiledFilename("relu", info, 2);
         if (this->compiled_func.find(filename) == this->compiled_func.end()) {
+          this->compiled_func.insert(filename);
           filename = CompileRelu(batch, n_feat, "./prog_frag/" + filename);
+        }
+      } else if (name == "ilavta.conv1d") {
+        auto input_shape = GetShape(cn->args[0]->checked_type());
+        auto weight_shape = GetShape(cn->args[1]->checked_type());
+        int N = input_shape[0];
+        int C = input_shape[1];
+        int W = input_shape[2];
+
+        int O = weight_shape[0];
+        int I = C;
+        int wgtW = weight_shape[2];
+
+        int vec_width = I * wgtW;
+        int vec_cnt = N * (W - wgtW + 1);
+        int input_info[5] = {N, C, W, O, wgtW};
+        filename = GetCompiledFilename("conv1d", input_info, 5);
+        if (this->compiled_func.find(filename) == this->compiled_func.end()) {
+          this->compiled_func.insert(filename);
+          filename = CompileGEMM(vec_cnt, vec_width, O, "./prog_frag/" + filename);
         }
       }
     } else {
