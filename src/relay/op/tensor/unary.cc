@@ -532,6 +532,7 @@ RELAY_REGISTER_OP("accelerator_call")
     .set_attr<String>("AcceleratorFunc", "unknown")
     .set_attr<Array<Integer>>("OutputShape", {})
     .set_support_level(10)
+    .set_attr<TOpPattern>("TOpPattern", kOpaque)
     .add_type_rel("AcceleratorCall", AcceleratorCallRel);
 
 RELAY_REGISTER_UNARY_OP("isnan")
