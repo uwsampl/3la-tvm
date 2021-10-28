@@ -284,13 +284,16 @@ def check_match(template, target):
 
 
 class MatchMutator(ExprMutator):
-    def __init__(self, target, compiler_name, composite_name, composite_counter=0):
+    def __init__(self, target, compiler_name, composite_name, composite_counter=0, callback=None):
         """
         Target: Expression that the matcher is seeking
         Compiler name: Name for the custom codegen
         Composite name: Name for the *construct produced* in the custom codegen
         Composite counter: Id number used for generating compiler IDs
                            (they must be globally unique)
+        Callback: Function (expr -> bool) that checks properties of the matched expr.
+                  Register a match only if callback(expr) is True.
+                  Default behavior is always to return True.
 
         Free vars in the target expression will be arguments to the extracted function
         """
@@ -302,7 +305,8 @@ class MatchMutator(ExprMutator):
         self.compiler_name = compiler_name
         self.composite_name = composite_name
         self.composite_counter = composite_counter
-    
+        self.callback = (lambda expr: True) if callback is None else callback
+
     def to_key(self, relay_var):
         def hash_type(relay_type):
             {
@@ -346,7 +350,7 @@ class MatchMutator(ExprMutator):
         # inner_args = list(map(lambda v: relay.Var(v.name_hint, match_args[self.to_key(v)].checked_type), inner_free_vars))
         inner_args_map = {}
         for var in inner_free_vars:
-            inner_args_map[var] = relay.Var(var.name_hint + str(self.composite_counter), match_args[self.to_key(var)].checked_type)
+            inner_args_map[var] = relay.Var(var.name_hint + str(self.composite_counter))
         inner_body_rewritten = deduplicate_vars(inner_body, var_map=inner_args_map, use_original=True)
         inner_func = relay.Function(list(map(inner_args_map.get, inner_free_vars)), inner_body_rewritten)
         inner_func = inner_func.with_attr("Composite", self.composite_name)
@@ -372,14 +376,15 @@ class MatchMutator(ExprMutator):
                 return expr
 
         found_match, match_args = check_match(self.target, expr)
-        if found_match:
+        # only permit the match if the callback is true
+        if found_match and self.callback(expr):
             # need to check for matches in the match args too
             final_args = {self.to_key(var): self.visit(arg) for var, arg in match_args.items()}
             return self.extract_target(final_args)
         return super().visit(expr)
 
 
-def annotate_exact_matches(expr, target, compiler_name, composite_name):
+def annotate_exact_matches(expr, target, compiler_name, composite_name, callback=None):
     """
     Given an expression and a target pattern,
     this will replace all instances of the target pattern
@@ -404,7 +409,7 @@ def annotate_exact_matches(expr, target, compiler_name, composite_name):
 
     This nested function structure is designed to make it easier for BYOC codegens to match those definitions.
     """
-    mut = MatchMutator(target, compiler_name, composite_name)
+    mut = MatchMutator(target, compiler_name, composite_name, callback=callback)
     return mut.visit(expr)
 
 
