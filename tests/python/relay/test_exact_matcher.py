@@ -1,32 +1,32 @@
 import tvm
 from tvm import relay
 
-from tvm.relay.testing import annotate_exact_matches, deduplicate_vars, check_compiler_call
+from tvm.relay.testing import annotate_exact_matches, deduplicate_vars, check_annotations, check_compiler_call
 
-def assert_simple_cases(pattern, compiler_name, pattern_name):
+def assert_simple_cases(pattern, compiler_name, pattern_name, callback=None):
     fresh_pattern = deduplicate_vars(pattern)
 
-    self_match = annotate_exact_matches(fresh_pattern, pattern, compiler_name, pattern_name)
+    self_match = annotate_exact_matches(fresh_pattern, pattern, compiler_name, pattern_name, callback=callback)
     assert check_compiler_call(self_match, pattern)
 
     a = relay.Var("a")
 
     plus = fresh_pattern + a
-    plus_match = annotate_exact_matches(plus, pattern, compiler_name, pattern_name)
+    plus_match = annotate_exact_matches(plus, pattern, compiler_name, pattern_name, callback=callback)
     assert isinstance(plus_match, relay.Call)
     assert plus_match.op.name == "add"
     assert plus_match.args[1] == a
     assert check_compiler_call(plus_match.args[0], pattern)
 
     in_func = relay.Function([], fresh_pattern)
-    in_func_match = annotate_exact_matches(in_func, pattern, compiler_name, pattern_name)
+    in_func_match = annotate_exact_matches(in_func, pattern, compiler_name, pattern_name, callback=callback)
     assert isinstance(in_func_match, relay.Function)
     assert len(in_func_match.params) == 0
     assert check_compiler_call(in_func_match.body, pattern)
 
     b = relay.Var("b")
     let = relay.Let(b, fresh_pattern, fresh_pattern + b)
-    let_match = annotate_exact_matches(let, pattern, compiler_name, pattern_name)
+    let_match = annotate_exact_matches(let, pattern, compiler_name, pattern_name, callback=callback)
     assert isinstance(let_match, relay.Let)
     assert check_compiler_call(let_match.value, pattern)
     assert isinstance(let_match.body, relay.Call)
@@ -35,7 +35,7 @@ def assert_simple_cases(pattern, compiler_name, pattern_name):
 
     x, y, z = relay.Var("x"), relay.Var("y"), relay.Var("z")
     call = relay.Function([x, y, z], (x + y) * z)(a, fresh_pattern, b)
-    call_match = annotate_exact_matches(call, pattern, compiler_name, pattern_name)
+    call_match = annotate_exact_matches(call, pattern, compiler_name, pattern_name, callback=callback)
     assert isinstance(call_match, relay.Call)
     assert tvm.ir.structural_equal(call_match.op, call.op, True)
     assert len(call_match.args) == 3
@@ -45,7 +45,7 @@ def assert_simple_cases(pattern, compiler_name, pattern_name):
 
     x, y = relay.Var("x"), relay.Var("y")
     tup = relay.Tuple([x, fresh_pattern, y])
-    tup_match = annotate_exact_matches(tup, pattern, compiler_name, pattern_name)
+    tup_match = annotate_exact_matches(tup, pattern, compiler_name, pattern_name, callback=callback)
     assert isinstance(tup_match, relay.Tuple)
     assert isinstance(tup_match.fields[0], relay.Var)
     assert isinstance(tup_match.fields[2], relay.Var)
@@ -59,7 +59,7 @@ def assert_simple_cases(pattern, compiler_name, pattern_name):
             relay.PatternVar(z), relay.PatternVar(w)
         ]), fresh_pattern)
     ])
-    match_clause_match = annotate_exact_matches(match_clause, pattern, compiler_name, pattern_name)
+    match_clause_match = annotate_exact_matches(match_clause, pattern, compiler_name, pattern_name, callback=callback)
     assert isinstance(match_clause_match, relay.Match)
     assert len(match_clause_match.clauses) == 3
     assert isinstance(match_clause_match.clauses[0].lhs, relay.PatternWildcard)
@@ -75,9 +75,55 @@ def assert_simple_cases(pattern, compiler_name, pattern_name):
     assert check_compiler_call(match_clause_match.clauses[2].rhs, pattern)
 
     ref = relay.RefCreate(fresh_pattern)
-    ref_match = annotate_exact_matches(ref, pattern, compiler_name, pattern_name)
+    ref_match = annotate_exact_matches(ref, pattern, compiler_name, pattern_name, callback=callback)
     assert isinstance(ref_match, relay.RefCreate)
     assert check_compiler_call(ref_match.value, pattern)
+
+
+def assert_simple_cases_fail(target, pattern, compiler_name, pattern_name, callback=None):
+    # if you pass a target that the pattern does not match, the nested cases should fail too
+    basic_match = annotate_exact_matches(target, pattern, compiler_name, pattern_name, callback=callback)
+    assert not check_compiler_call(basic_match, pattern)
+
+    a = relay.Var("a")
+
+    plus = target + a
+    plus_match = annotate_exact_matches(plus, pattern, compiler_name, pattern_name, callback=callback)
+    assert tvm.ir.structural_equal(plus, plus_match, True)
+
+    in_func = relay.Function([], target)
+    in_func_match = annotate_exact_matches(in_func, pattern, compiler_name, pattern_name, callback=callback)
+    assert tvm.ir.structural_equal(in_func, in_func_match, True)
+
+    b = relay.Var("b")
+    let = relay.Let(b, target, target + b)
+    let_match = annotate_exact_matches(let, pattern, compiler_name, pattern_name, callback=callback)
+    assert tvm.ir.structural_equal(let, let_match, True)
+
+    x, y, z = relay.Var("x"), relay.Var("y"), relay.Var("z")
+    call = relay.Function([x, y, z], (x + y) * z)(a, target, b)
+    call_match = annotate_exact_matches(call, pattern, compiler_name, pattern_name, callback=callback)
+    assert tvm.ir.structural_equal(call, call_match, True)
+
+    x, y = relay.Var("x"), relay.Var("y")
+    tup = relay.Tuple([x, target, y])
+    tup_match = annotate_exact_matches(tup, pattern, compiler_name, pattern_name, callback=callback)
+    assert tvm.ir.structural_equal(tup, tup_match, True)
+
+    x, y, z, w = relay.Var("x"), relay.Var("y"), relay.Var("z"), relay.Var("w")
+    match_clause = relay.Match(x, [
+        relay.Clause(relay.PatternWildcard(), target),
+        relay.Clause(relay.PatternVar(y), y),
+        relay.Clause(relay.PatternTuple([
+            relay.PatternVar(z), relay.PatternVar(w)
+        ]), target)
+    ])
+    match_clause_match = annotate_exact_matches(match_clause, pattern, compiler_name, pattern_name, callback=callback)
+    assert tvm.ir.structural_equal(match_clause, match_clause_match, True)
+
+    ref = relay.RefCreate(target)
+    ref_match = annotate_exact_matches(ref, pattern, compiler_name, pattern_name, callback=callback)
+    assert tvm.ir.structural_equal(ref, ref_match, True)
 
 
 def test_match_misses():
@@ -93,7 +139,7 @@ def test_match_misses():
     for prog in progs:
         new_prog = annotate_exact_matches(prog, pattern, "MyCompiler", "Dense")
         assert tvm.ir.structural_equal(prog, new_prog), (prog, new_prog)
-
+        assert_simple_cases_fail(prog, pattern, "MyCompiler", "Dense")
 
 def test_operator_simple_match():
     pattern = relay.nn.dense(relay.Var("v"), relay.Var("w"))
@@ -326,6 +372,77 @@ def test_multiple_matches():
     assert not check_compiler_call(lin_match.args[2], pattern)
 
 
+def test_operator_callback():
+    def non_grouped(conv2d):
+        assert isinstance(conv2d, relay.Call)
+        if "groups" not in conv2d.attrs.keys():
+            return True
+        return conv2d.attrs.groups == 1
+
+    def grouped(conv2d):
+        assert isinstance(conv2d, relay.Call)
+        return "groups" in conv2d.attrs.keys() and conv2d.attrs.groups > 1
+
+    x, w = relay.Var("x"), relay.Var("w")
+    pattern = relay.nn.conv2d(x, w)
+
+    y, z = relay.Var("y"), relay.Var("z")
+    ungrouped_conv = relay.nn.conv2d(y, z)
+    assert_simple_cases(pattern, "MyCompiler", "ungrouped_conv", callback=non_grouped)
+    assert_simple_cases_fail(ungrouped_conv, pattern, "MyCompiler", "grouped_conv", callback=grouped)
+
+    grouped_conv = relay.nn.conv2d(y, z, groups=2)
+    assert_simple_cases(grouped_conv, "MyCompiler", "ungrouped_conv", callback=grouped)
+    assert_simple_cases_fail(grouped_conv, pattern, "MyCompiler", "ungrouped_conv", callback=non_grouped)
+
+
+def test_linear_layer_case():
+    # full-scale case that had problems before
+    def linear_definition(batch_size, in_features, out_features, num_call=0):
+        weight = relay.var(f'weight_{num_call}', relay.TensorType((out_features, in_features), 'float32'))
+        bias   = relay.var(f'bias_{num_call}', relay.TensorType((out_features, ), 'float32'))
+        inp    = relay.var(f'input', relay.TensorType((batch_size, in_features)))
+        return relay.Function([inp], relay.nn.bias_add(relay.nn.dense(inp, weight), bias))
+
+    batch_size = 8
+    in_features = 32
+    hidden_dim_1 = 64
+    hidden_dim_2 = 8
+
+    img = relay.var('img', relay.TensorType((batch_size, in_features), 'float32'))
+    fc1 = linear_definition(batch_size, in_features, hidden_dim_1, 0)(img)
+    fc2 = linear_definition(batch_size, hidden_dim_1, hidden_dim_2, 1)(fc1)
+    result = relay.nn.softmax(fc2, axis=-1)
+    mod = tvm.IRModule.from_expr(result)
+    mod = relay.transform.InferType()(mod)
+
+    linear_pattern = linear_definition(batch_size, in_features, hidden_dim_1).body
+    main_mut = annotate_exact_matches(mod["main"], linear_pattern, 'ilaflex', 'ilaflex.linear')
+    mod_mut = tvm.IRModule.from_expr(main_mut)
+    mod_mut = relay.transform.InferType()(mod_mut)
+    final_main = mod_mut["main"]
+
+    # structure should be nn.softmax(
+    #   call(func literal with pattern matches,
+    #     call(func literal with pattern matches, args),
+    #     other args))
+    final_body = final_main.body
+    assert isinstance(final_body, relay.Call)
+    assert final_body.op.name == "nn.softmax"
+    second_call = final_body.args[0]
+    assert isinstance(second_call, relay.Call)
+
+    # check_compiler_call uses structural equality,
+    # which will reject based on type annotations,
+    # so this is doing a simpler check
+    # (if you want to reject based on shape, use a callback)
+    assert check_annotations(second_call.op.body)
+    first_call = second_call.args[0]
+    assert isinstance(first_call, relay.Call)
+    assert check_annotations(first_call.op.body)
+
+
+
 if __name__ == "__main__":
     test_match_misses()
     test_operator_simple_match()
@@ -342,3 +459,5 @@ if __name__ == "__main__":
     test_inconsistent_match()
     test_ref_match()
     test_multiple_matches()
+    test_operator_callback()
+    test_linear_layer_case()
