@@ -37,6 +37,7 @@ pub enum Error {
 }
 
 static TVM_BUILD: Lazy<Function> = Lazy::new(|| {
+    python::import("readline").unwrap();
     python::import("tvm").unwrap();
     python::import("tvm.relay").unwrap();
     Function::get("tvm.relay.build").unwrap()
