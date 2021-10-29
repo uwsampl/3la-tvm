@@ -48,7 +48,7 @@ from .py_converter import to_python, run_as_python
 from ..transform import gradient
 from .exact_matcher import annotate_exact_matches
 # these are just for testing
-from .exact_matcher import deduplicate_vars, check_compiler_call
+from .exact_matcher import deduplicate_vars, check_compiler_call, check_annotations
 
 from .op_summary import count_all_ops, count_all_overloads, count_all_ops_in_overloads
 
