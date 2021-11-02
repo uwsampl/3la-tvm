@@ -47,6 +47,75 @@ namespace topi {
 using namespace tvm::te;
 using namespace topi::detail;
 
+inline Tensor windows(const Tensor& x, int axis, Array<Integer> window_shape,
+                      Array<Integer> strides, std::string name = "T_windows",
+                      // TODO(@gussmith23) what to tag it?
+                      std::string tag = "") {
+  ICHECK(axis < x->shape.size()) << "axis must be a valid dimension index of x.";
+  ICHECK(x->shape.size() - axis == window_shape.size())
+      << "There must be a window shape for every dimension of x over which we are forming windows.";
+  ICHECK(strides.size() == window_shape.size()) << "Windows and strides should be the same length.";
+
+  // Compute the new shape.
+  Array<PrimExpr> new_shape;
+  // Dimensions up until `axis` remain the same.
+  for (int i = 0; i < axis; ++i) {
+    new_shape.push_back(x->shape[i]);
+  }
+
+  // New dimensions which result from sliding the window in each dimension. One new dimension per
+  // window dimension.
+  for (int i = 0; i < window_shape.size(); ++i) {
+    // Length of the shape along this dimension.
+    auto dim_len = x->shape[axis + i];
+    // Length of the window along this dimension.
+    auto window_len = window_shape[i];
+    // Strides along this dimension.
+    auto stride = strides[i];
+
+    new_shape.push_back(floordiv(dim_len - (window_len - 1) + stride - 1, stride));
+  }
+
+  // Dimensions comprising the window.
+  for (int i = 0; i < window_shape.size(); ++i) {
+    new_shape.push_back(window_shape[i]);
+  }
+
+  ICHECK(new_shape.size() == axis + 2 * window_shape.size());
+
+  // Now use compute() to return, given the index into the new shape, the value from the old
+  // tensor.
+  return compute(
+      new_shape,
+      [&](const Array<Var>& indices) {
+        ICHECK(indices.size() == axis + 2 * window_shape.size());
+
+        // The index at which to index the old tensor x.
+        Array<PrimExpr> idx;
+
+        // Dimensions up until `axis` remain the same.
+        for (int i = 0; i < axis; ++i) {
+          idx.push_back(indices[i]);
+        }
+
+        for (int i = 0; i < window_shape.size(); ++i) {
+          // Which window in this dimension we are indexing.
+          auto window_idx = indices[axis + i];
+          // Which index within the window we are indexing.
+          auto idx_within_window = indices[axis + window_shape.size() + i];
+          // Stride value for this dimension.
+          auto stride = strides[i];
+
+          idx.push_back(window_idx * stride + idx_within_window);
+        }
+
+        ICHECK(idx.size() == x->shape.size());
+
+        return x(idx);
+      },
+      name, tag);
+}
+
 /*!
  * \brief Creates an operation to insert new dimensions of length 1
  *

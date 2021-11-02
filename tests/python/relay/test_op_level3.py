@@ -78,6 +78,8 @@ def test_cast():
     assert "dtype=" in yy.astext()
     assert yy.checked_type == relay.TensorType((8, 9, 4), "int32")
 
+def test_windows():
+    pass
 
 def test_clip():
     a = relay.var("a", relay.TensorType((10, 4), "float32"))
