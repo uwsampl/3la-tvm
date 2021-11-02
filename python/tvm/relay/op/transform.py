@@ -25,6 +25,11 @@ from .dyn import _make as _dyn_make
 from .tensor import shape_of
 
 
+def windows(data, axis, window_shape, strides):
+    from .. import _ffi_api as _relay_make
+
+    return _relay_make.windows(data, axis, window_shape, strides)
+
 def cast(data, dtype):
     """Cast input tensor to data type.
 
