@@ -51,6 +51,48 @@ namespace tvm {
 namespace relay {
 using tir::IntImmNode;
 
+TVM_REGISTER_NODE_TYPE(WindowsAttrs);
+
+bool WindowsRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
+                const TypeReporter& reporter) {
+  // TODO(@gussmith23)
+  return true;
+}
+
+Array<te::Tensor> WindowsCompute(const Attrs& attrs, const Array<te::Tensor>& inputs,
+                                 const Type& out_type) {
+  const WindowsAttrs* param = attrs.as<WindowsAttrs>();
+  ICHECK(param != nullptr);
+  return {topi::windows(inputs[0], param->axis, param->window_shape, param->strides)};
+}
+
+Expr MakeWindows(Expr data, int axis, Array<Integer> window_shape, Array<Integer> strides) {
+  auto attrs = make_object<WindowsAttrs>();
+  attrs->axis = axis;
+  attrs->window_shape = window_shape;
+  attrs->strides = strides;
+  static const Op& op = Op::Get("windows");
+  return Call(op, {data}, Attrs(attrs), {});
+}
+
+TVM_REGISTER_GLOBAL("relay.ir.windows").set_body_typed(MakeWindows);
+
+RELAY_REGISTER_OP("windows")
+    .describe(R"code(Form windows over a tensor.
+
+)code" TVM_ADD_FILELINE)
+    .set_num_inputs(1)
+    .set_attrs_type<WindowsAttrs>()
+    .add_argument("data", "Tensor", "The input tensor.")
+    // TODO(@gussmith23)
+    //.set_support_level(3)
+    .add_type_rel("Windows", WindowsRel)
+    .set_attr<FTVMCompute>("FTVMCompute", WindowsCompute);
+// TODO(@gussmith23)
+//.set_attr<TOpPattern>("TOpPattern", kElemWise)
+// TODO(@gussmith23)
+//.set_attr<FInferCorrectLayout>("FInferCorrectLayout", ElemwiseArbitraryLayout);
+
 // relay.cast
 TVM_REGISTER_NODE_TYPE(CastAttrs);
 
