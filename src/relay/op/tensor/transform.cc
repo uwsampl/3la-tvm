@@ -55,7 +55,43 @@ TVM_REGISTER_NODE_TYPE(WindowsAttrs);
 
 bool WindowsRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
                 const TypeReporter& reporter) {
-  // TODO(@gussmith23)
+  // `types` contains: [data, result]
+  ICHECK_EQ(types.size(), 2);
+  const auto* data = types[0].as<TensorTypeNode>();
+  if (data == nullptr) {
+    ICHECK(types[0].as<IncompleteTypeNode>())
+        << "windows: expect input type to be TensorType but get " << types[0];
+    return false;
+  }
+  const auto* param = attrs.as<WindowsAttrs>();
+  const int axis = param->axis;
+
+  std::vector<IndexExpr> oshape;
+
+  // Dimensions up until `axis` remain the same.
+  for (int i = 0; i < axis; ++i) {
+    oshape.emplace_back(data->shape[i]);
+  }
+
+  // New dimensions which result from sliding the window in each dimension. One new dimension per
+  // window dimension.
+  for (int i = 0; i < param->window_shape.size(); ++i) {
+    // Length of the shape along this dimension.
+    auto dim_len = data->shape[axis + i];
+    // Length of the window along this dimension.
+    auto window_len = param->window_shape[i];
+    // Strides along this dimension.
+    auto stride = param->strides[i];
+
+    oshape.push_back(floordiv(dim_len - (window_len - 1) + stride - 1, stride));
+  }
+
+  // Dimensions comprising the window.
+  for (int i = 0; i < param->window_shape.size(); ++i) {
+    oshape.push_back(param->window_shape[i]);
+  }
+
+  reporter->Assign(types[1], TensorType(oshape, data->dtype));
   return true;
 }
 
@@ -87,9 +123,10 @@ RELAY_REGISTER_OP("windows")
     // TODO(@gussmith23)
     //.set_support_level(3)
     .add_type_rel("Windows", WindowsRel)
-    .set_attr<FTVMCompute>("FTVMCompute", WindowsCompute);
+    // Not needed if we register in python?
+    //.set_attr<FTVMCompute>("FTVMCompute", WindowsCompute)
 // TODO(@gussmith23)
-//.set_attr<TOpPattern>("TOpPattern", kElemWise)
+    .set_attr<TOpPattern>("TOpPattern", kOpaque);
 // TODO(@gussmith23)
 //.set_attr<FInferCorrectLayout>("FInferCorrectLayout", ElemwiseArbitraryLayout);
 

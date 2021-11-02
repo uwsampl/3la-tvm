@@ -934,3 +934,6 @@ def adv_index(data, indices):
         Output tensor
     """
     return cpp.adv_index(data, indices)
+
+def windows(data, axis, window_shape, strides):
+    return cpp.windows(data, axis, window_shape, strides)
