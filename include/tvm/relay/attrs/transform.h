@@ -33,6 +33,20 @@
 namespace tvm {
 namespace relay {
 
+struct WindowsAttrs : public tvm::AttrsNode<WindowsAttrs> {
+  int axis;
+  Array<Integer> window_shape;
+  Array<Integer> strides;
+  TVM_DECLARE_ATTRS(WindowsAttrs, "relay.attrs.WindowsAttrs") {
+    TVM_ATTR_FIELD(axis).describe(
+        "What axis the windows begin forming over.");
+    TVM_ATTR_FIELD(window_shape).describe(
+        "The window shape to form over the input.");
+    TVM_ATTR_FIELD(strides).describe(
+        "How to stride the windows.");
+  }
+};
+
 /*! \brief data type cast */
 struct CastAttrs : public tvm::AttrsNode<CastAttrs> {
   DataType dtype;

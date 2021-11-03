@@ -1539,6 +1539,27 @@ def uniform_strategy(attrs, inputs, out_type, target):
     )
     return strategy
 
+# windows
+def wrap_compute_windows():
+    """Wrap windows topi compute"""
+
+    def _compute_windows(attrs, inputs, _):
+        return [topi.windows(inputs[0], attrs.axis, attrs.window_shape, attrs.strides)]
+
+    return _compute_windows
+
+
+@override_native_generic_func("windows_strategy")
+def windows_strategy(attrs, inputs, out_type, target):
+    """windows generic strategy"""
+    strategy = _op.OpStrategy()
+    strategy.add_implementation(
+        wrap_compute_windows(),
+        wrap_topi_schedule(topi.generic.schedule_extern),
+        name="windows.generic",
+    )
+    return strategy
+
 
 def wrap_compute_scanop(topi_compute):
     """Wrap scanop style topi compute"""
