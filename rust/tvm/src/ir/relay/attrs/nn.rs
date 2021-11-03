@@ -28,6 +28,16 @@ type IndexExpr = PrimExpr;
 
 #[repr(C)]
 #[derive(Object, Debug)]
+#[ref_name = "PadAttrs"]
+#[type_key = "relay.attrs.PadAttrs"]
+pub struct PadAttrsNode {
+    pub base: BaseAttrsNode,
+    pub pad_width: Array<Array<IndexExpr>>,
+    pub pad_mode: TString,
+}
+
+#[repr(C)]
+#[derive(Object, Debug)]
 #[ref_name = "Conv1DAttrs"]
 #[type_key = "relay.attrs.Conv1DAttrs"]
 pub struct Conv1DAttrsNode {
