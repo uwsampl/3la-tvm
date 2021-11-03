@@ -32,7 +32,7 @@ type IndexExpr = PrimExpr;
 #[type_key = "relay.attrs.PadAttrs"]
 pub struct PadAttrsNode {
     pub base: BaseAttrsNode,
-    pub pad_width: Array<Array<IndexExpr>>,
+    pub pad_width: Array<Array<crate::ir::tir::IntImm>>,
     pub pad_mode: TString,
 }
 
