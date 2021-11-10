@@ -511,15 +511,20 @@ bool AcceleratorCallRel(const Array<Type>& types, int num_inputs, const Attrs& a
     for (size_t i = 0; i < shape.size(); ++i) {
         vec.push_back(shape[i]);
     }
-    reporter->Assign(types[0], TensorType(Array<IndexExpr>(vec), DataType::Float(32)));
+    auto dtype = shape_attr->output_dtype;
+    if (dtype.bits() == 0) {
+        dtype = DataType::Float(32);
+    }
+    reporter->Assign(types[0], TensorType(Array<IndexExpr>(vec), dtype));
     return true;
 }
 
-Expr MakeAcceleratorCall(String func, Array<Integer> shape) {
+Expr MakeAcceleratorCall(String func, Array<Integer> shape, DataType dtype) {
     static const Op& op = Op::Get("accelerator_call");
     auto attrs = make_object<AcceleratorCallAttrs>();
     attrs->func_name = func;
     attrs->output_shape = shape;
+    attrs->output_dtype = dtype;
     return Call(op, {}, Attrs(attrs), {});
 }
 
@@ -531,6 +536,7 @@ RELAY_REGISTER_OP("accelerator_call")
     .set_num_inputs(0)
     .set_attr<String>("AcceleratorFunc", "unknown")
     .set_attr<Array<Integer>>("OutputShape", {})
+    .set_attr<DataType>("OutputDataType", DataType::Float(32))
     .set_support_level(10)
     .set_attr<TOpPattern>("TOpPattern", kOpaque)
     .add_type_rel("AcceleratorCall", AcceleratorCallRel);

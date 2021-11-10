@@ -1314,7 +1314,7 @@ def isinf(data):
     """
     return _make.isinf(data)
 
-def accelerator_call(func, shape):
+def accelerator_call(func, shape, out_dtype=""):
     """Stub operator for accelerator calls
 
     Parameters
@@ -1326,4 +1326,4 @@ def accelerator_call(func, shape):
     result : relay.Expr
         The computed expression
     """
-    return _make.accelerator_call(func, shape)
+    return _make.accelerator_call(func, shape, out_dtype)
