@@ -496,9 +496,12 @@ struct UniqueAttrs : public tvm::AttrsNode<UniqueAttrs> {
 struct AcceleratorCallAttrs : public tvm::AttrsNode<AcceleratorCallAttrs> {
   std::string func_name;
   Array<Integer> output_shape;
+  DataType output_dtype;
   TVM_DECLARE_ATTRS(AcceleratorCallAttrs, "relay.attrs.AcceleratorCallAttrs") {
     TVM_ATTR_FIELD(func_name).describe("The name of the accelerator function").set_default("unknown");
     TVM_ATTR_FIELD(output_shape).describe("Inferred output shape for the accelerator call");
+    TVM_ATTR_FIELD(output_dtype).describe("Inferred / annotated output data type of the accelerator call")
+                                .set_default(NullValue<DataType>());
   }
 };  // struct AcceleratorCallAttrs
 
