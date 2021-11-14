@@ -22,8 +22,18 @@ use crate::ir::PrimExpr;
 use crate::runtime::array::Array;
 use crate::runtime::ObjectRef;
 use tvm_macros::Object;
+use tvm_rt::DataType;
 
 type IndexExpr = PrimExpr;
+
+#[repr(C)]
+#[derive(Object, Debug)]
+#[ref_name = "CastAttrs"]
+#[type_key = "relay.attrs.CastAttrs"]
+pub struct CastAttrsNode {
+    pub base: BaseAttrsNode,
+    pub dtype: DataType,
+}
 
 #[repr(C)]
 #[derive(Object, Debug)]
