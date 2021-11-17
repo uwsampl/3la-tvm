@@ -183,3 +183,13 @@ pub struct DropoutAttrsNode {
     pub base: BaseAttrsNode,
     pub rate: f64,
 }
+
+#[repr(C)]
+#[derive(Object, Debug)]
+#[ref_name = "BatchMatmulAttrs"]
+#[type_key = "relay.attrs.BatchMatmulAttrs"]
+pub struct BatchMatmulAttrsNode {
+    pub base: BaseAttrsNode,
+    pub auto_scheduler_rewritten_layout: TString,
+    pub out_dtype: DataType,
+}
