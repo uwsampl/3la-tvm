@@ -160,7 +160,7 @@ std::string CompileGEMM(int batch, size_t n_inp_cols, size_t n_wgt_rows, int fac
     prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_WGT, 0, 0, out_dim * in_dim, 1));
     prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_INP, 0, 0, batch * in_dim, 1));
     prog.push_back(getGEMMAsm(0, uop_size));
-    prog.push_back(getAluAsm(VTA_ALU_OPCODE_MUL, 0, uop_size, 1, factor));
+    prog.push_back(getAluAsm(4 /* VTA_ALU_OPCODE_MUL */, 0, uop_size, 1, factor));
     prog.push_back(getAluAsm(VTA_ALU_OPCODE_SHR, 0, uop_size, 1, nbits));
     prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_STORE, VTA_MEM_ID_OUT, 0, 0, batch * out_dim, 1));
     return write_to_file(filename, prog_frag);

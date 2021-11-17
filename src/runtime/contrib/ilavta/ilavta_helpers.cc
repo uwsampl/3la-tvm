@@ -317,7 +317,7 @@ std::vector<int> approximate_scale(double x) {
   double n_scaled = (double)n * fact;
   int round_up_n = round(n_scaled);
   int div = gcd(round_up_n, round_up_d);
-  std::vector<int> result = {round_up_n, nbits};
+  std::vector<int> result = {round_up_n / div, nbits};
   return result;
 }
 
