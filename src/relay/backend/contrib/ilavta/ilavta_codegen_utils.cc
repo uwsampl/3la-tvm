@@ -149,7 +149,7 @@ std::string write_to_file(const std::string& filename, const json& data) {
   return filename + "_prog_frag.json";
 }
 
-std::string CompileGEMM(int batch, size_t n_inp_cols, size_t n_wgt_rows, std::string filename) {
+std::string CompileGEMM(int batch, size_t n_inp_cols, size_t n_wgt_rows, int factor, int nbits, std::string filename) {
     size_t in_dim = n_inp_cols % VTA_BLOCK_IN != 0 ? n_inp_cols / VTA_BLOCK_IN + 1 : n_inp_cols / VTA_BLOCK_IN;
     size_t out_dim = n_wgt_rows % VTA_BLOCK_OUT != 0 ? n_wgt_rows / VTA_BLOCK_OUT + 1 : n_wgt_rows / VTA_BLOCK_OUT;
     size_t uop_size = batch * in_dim * out_dim;
@@ -160,6 +160,8 @@ std::string CompileGEMM(int batch, size_t n_inp_cols, size_t n_wgt_rows, std::st
     prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_WGT, 0, 0, out_dim * in_dim, 1));
     prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_INP, 0, 0, batch * in_dim, 1));
     prog.push_back(getGEMMAsm(0, uop_size));
+    prog.push_back(getAluAsm(VTA_ALU_OPCODE_MUL, 0, uop_size, 1, factor));
+    prog.push_back(getAluAsm(VTA_ALU_OPCODE_SHR, 0, uop_size, 1, nbits));
     prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_STORE, VTA_MEM_ID_OUT, 0, 0, batch * out_dim, 1));
     return write_to_file(filename, prog_frag);
 }

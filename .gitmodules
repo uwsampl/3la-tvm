@@ -13,4 +13,3 @@
 [submodule "3rdparty/vta-hw"]
 	path = 3rdparty/vta-hw
 	url = git@github.com:uwsampl/3la-vta.git
-

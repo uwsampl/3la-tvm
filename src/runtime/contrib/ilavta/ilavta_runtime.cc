@@ -61,6 +61,9 @@ class ILAVTARuntime : public JSONRuntimeBase {
       auto wgt_eid = EntryID(input_nodes_[1], 0);
       auto& wgt_node_data = data_entry_[wgt_eid];
 
+      auto s_act_eid = EntryID(input_nodes_[2], 0);
+      auto& s_act_data = data_entry_[s_act_eid];
+
 # if 0
       for (int i = 0; i < input_nodes_.size(); ++i) {
         auto eid = EntryID(input_nodes_[0], 0);
@@ -83,11 +86,16 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
       int uop_size = batch / VTA_BATCH * in_channels / VTA_BLOCK_IN * out_channels / VTA_BLOCK_OUT;
 
-      uint8_t* input = reinterpret_cast<uint8_t*>(input_node_data->data);
-      uint8_t* weight = reinterpret_cast<uint8_t*>(wgt_node_data->data);
+      int8_t* input = reinterpret_cast<int8_t*>(input_node_data->data);
+      int8_t* weight = reinterpret_cast<int8_t*>(wgt_node_data->data);
+      float* f32_s_act = reinterpret_cast<float*>(s_act_data->data);
+      double s_act = static_cast<double>(*f32_s_act);
+      auto imm = approximate_scale(s_act);
+      int factor = imm[0];
+      int nbits = imm[1];
 
-      uint8_t* input_buf = reinterpret_cast<uint8_t *>(VTAMemAlloc(sizeof(uint8_t) * batch * in_channels, 0));
-      uint8_t* wgt_buf   = reinterpret_cast<uint8_t *>(VTAMemAlloc(sizeof(uint8_t) * out_channels * in_channels, 0));
+      int8_t* input_buf = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * batch * in_channels, 0));
+      int8_t* wgt_buf   = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * out_channels * in_channels, 0));
       int32_t* acc_buf  = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * batch * out_channels, 0));
       VTAUop* uop_buf   = getGEMMUops(batch / VTA_BATCH, in_channels / VTA_BLOCK_IN, out_channels / VTA_BLOCK_OUT);
 
@@ -169,6 +177,15 @@ class ILAVTARuntime : public JSONRuntimeBase {
                     "ilavta_dense");
       
       std::string ila_asm = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
+      std::ifstream fin(ila_asm);
+      nlohmann::json asm_data = nlohmann::json::parse(fin);
+      fin.close();
+      asm_data[4]["imm"] = factor;
+      asm_data[5]["imm"] = nbits;
+      std::ofstream fout(ila_asm);
+      fout << asm_data;
+      fout.close();
+
       auto output_data = data_entry_[outputs_[0].id_];
       auto output_node = nodes_[outputs_[0].id_];
       auto dtype       = DLDataType2String(output_data->dtype);
@@ -206,11 +223,11 @@ class ILAVTARuntime : public JSONRuntimeBase {
       // TVM does array broadcasting over the matrix in bias_add
       // int32_t* bias_buf  = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * 1 * bias_channels, 0));
       // VTADeviceHandle device = VTADeviceAlloc();
-      uint32_t* combined_acc = reinterpret_cast<uint32_t*>(VTAMemAlloc(sizeof(uint32_t) * (bias_channels + batch * in_channels), 0));
+      int32_t* combined_acc = reinterpret_cast<int32_t*>(VTAMemAlloc(sizeof(uint32_t) * (bias_channels + batch * in_channels), 0));
       size_t acc_ptr = 0;
 
-      auto input = reinterpret_cast<uint8_t*>(input_data->data);
-      auto bias  = reinterpret_cast<uint8_t*>(bias_data->data);
+      auto input = reinterpret_cast<int8_t*>(input_data->data);
+      auto bias  = reinterpret_cast<int8_t*>(bias_data->data);
       for (int i = 0; i < batch; ++i) {
         for (int j = 0; j < in_channels; ++j) {
           if (i >= n_inp_rows || j >= n_inp_cols) {
@@ -258,10 +275,10 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int in_channels = in_feat * VTA_BLOCK_OUT;
 
       int uop_size = batch / VTA_BATCH * in_feat;
-      uint32_t* input_buf = reinterpret_cast<uint32_t *>(VTAMemAlloc(sizeof(uint32_t) * batch * in_channels, 0));
+      int32_t* input_buf = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * batch * in_channels, 0));
       VTAUop *uop_buf = getReluUops(batch, in_feat);
 
-      uint8_t* inputs = reinterpret_cast<uint8_t*>(input_data->data);
+      int8_t* inputs = reinterpret_cast<int8_t*>(input_data->data);
       for (int i = 0; i < batch; ++i) {
         for (int j = 0; j < in_channels; ++j) {
           if (i >= n_inp_rows || j >= n_inp_cols) {
@@ -305,10 +322,10 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
       CHECK(I == C) << "C != I: this should not be type checked";
 
-      uint8_t* input_data = reinterpret_cast<uint8_t*>(input_node_data->data);
-      uint8_t* wgt_data   = reinterpret_cast<uint8_t*>(wgt_node_data->data);
+      int8_t* input_data = reinterpret_cast<int8_t*>(input_node_data->data);
+      int8_t* wgt_data   = reinterpret_cast<int8_t*>(wgt_node_data->data);
 
-      uint8_t* data_col = reinterpret_cast<uint8_t*>(malloc(sizeof(uint8_t) * N * I * wgtW * (W - wgtW + 1)));
+      int8_t* data_col = reinterpret_cast<int8_t*>(malloc(sizeof(int8_t) * N * I * wgtW * (W - wgtW + 1)));
       int ptr = 0;
       int vec_cnt = 0;
       for (int batch = 0; batch < N; ++batch) {

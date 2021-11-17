@@ -38,4 +38,4 @@ enumn = "^0.1"
 bindgen = { version="0.57", default-features = false, features = ["runtime"] }
 anyhow = "^1.0"
 # TODO(@gussmith23) Change back when https://github.com/octoml/tvm-build/pull/9 lands
-tvm-build = { git="https://github.com/mwillsey/tvm-build"}
+tvm-build = { git="https://github.com/AD1024/tvm-build"}

@@ -28,6 +28,16 @@ type IndexExpr = PrimExpr;
 
 #[repr(C)]
 #[derive(Object, Debug)]
+#[ref_name = "ClipAttrs"]
+#[type_key = "relay.attrs.ClipAttrs"]
+pub struct ClipAttrsNode {
+    pub base: BaseAttrsNode,
+    pub a_min: f64,
+    pub a_max: f64,
+}
+
+#[repr(C)]
+#[derive(Object, Debug)]
 #[ref_name = "CastAttrs"]
 #[type_key = "relay.attrs.CastAttrs"]
 pub struct CastAttrsNode {

@@ -224,9 +224,9 @@ std::string to_hex(T x) {
     return ss.str();
 }
 
-std::string dump_datafile(uint8_t* input_buf, size_t input_size,
-                   uint8_t* weight_buf, size_t weight_size,
-                   uint32_t* acc_buf, size_t acc_size,
+std::string dump_datafile(int8_t* input_buf, size_t input_size,
+                   int8_t* weight_buf, size_t weight_size,
+                   int32_t* acc_buf, size_t acc_size,
                    VTAUop* uop_buf, size_t uop_size,
                    std::string filename) {
     json data_file;
@@ -283,6 +283,44 @@ std::string dump_datafile(uint8_t* input_buf, size_t input_size,
     return out_filename;
 }
 
+// Calculates GCD (greatest common divisor) of `x` and `y`
+int gcd(int x, int y) {
+  while (x ^= y ^= x ^= y %= x);
+  return y;
+}
+
+// approximate the scale of activation (scale of input * scale of weights)
+// the denominator is 
+std::vector<int> approximate_scale(double x) {
+  int n = 1;
+  int d = 1;
+  double eps = 1e-7;
+  double fract_value = (double)n / (double)d;
+  while (fabs(fract_value - x) > eps) {
+    if (fract_value < x) {
+      n += 1;
+    } else {
+      d += 1;
+      n = int(round(x * (double)d));
+    }
+    fract_value = (double)n / (double)d;
+  }
+  int nbits_r = (int)(ceil(log2((double)d)));
+  int nbits_l = (int)(floor(log2((double)d)));
+  int round_down_d = 1 << nbits_l;
+  int round_up_d = 1 << nbits_r;
+  int nbits = nbits_l;
+  if (round_up_d - d < d - round_down_d) {
+    nbits = nbits_r;
+  }
+  double fact = (double)round_up_d / (double)d;
+  double n_scaled = (double)n * fact;
+  int round_up_n = round(n_scaled);
+  int div = gcd(round_up_n, round_up_d);
+  std::vector<int> result = {round_up_n, nbits};
+  return result;
+}
+
 std::string runILASimulator(const std::string exp_name,
                             const std::string driver_dir,
                             int64_t& out_compile_time,
@@ -332,7 +370,7 @@ void readILAOutput(const std::string filename, ila_output_data &out_values) {
   }
 }
 
-size_t loadILAOutput(const ila_output_data &out_values, uint8_t* buffer, size_t out_h, size_t out_w) {
+size_t loadILAOutput(const ila_output_data &out_values, int8_t* buffer, size_t out_h, size_t out_w) {
   LOG(INFO) << "[Runtime] Copying from output json to byte buffer"; 
 
   size_t data_cur = 0;
@@ -347,14 +385,13 @@ size_t loadILAOutput(const ila_output_data &out_values, uint8_t* buffer, size_t 
       std::stringstream ss;
       ss << std::hex << val;
       ss >> temp;
-      buffer[buf_cur++] = static_cast<uint8_t>(temp);
+      buffer[buf_cur++] = static_cast<int8_t>(temp);
     }
   }
   return buf_cur;
 }
 
-template<class T>
-void copy_data(uint8_t* from_, T out_data, size_t size) {
+void copy_data(int8_t* from_, int8_t* out_data, size_t size) {
   for (size_t i = 0; i < size; ++i) {
     out_data[i] = from_[i];
   }
@@ -371,21 +408,11 @@ int64_t runSimGetData(std::string pattern_name, std::string driver_dir, std::str
   ila_output_data out_data;
   readILAOutput(output_file, out_data);
 
-  uint8_t* buffer = new uint8_t[output_size];
+  int8_t* buffer = new int8_t[output_size];
   return compile_time;
   auto buf_read = loadILAOutput(out_data, buffer, n_output_rows, n_output_cols);
   // CHECK(buf_read == output_size) << "Output size mismatch: " << buf_read << " v.s. " << output_size;
-  if (output_dtype == "int32") {
-    copy_data<int32_t*>(buffer, reinterpret_cast<int32_t*>(output_data), buf_read);
-  } else if (output_dtype == "int8") {
-    copy_data<int8_t*>(buffer, reinterpret_cast<int8_t*>(output_data), buf_read);
-  } else if (output_dtype == "uint8") {
-    copy_data<uint8_t*>(buffer, reinterpret_cast<uint8_t*>(output_data), buf_read);
-  } else if (output_dtype == "uint32") {
-    copy_data<uint32_t*>(buffer, reinterpret_cast<uint32_t*>(output_data), buf_read);
-  } else {
-    LOG(FATAL) << "Unrecognized output data type: " << output_dtype;
-  }
+  copy_data(buffer, reinterpret_cast<int8_t*>(output_data), buf_read);
   return compile_time;
   // return std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 }
