@@ -113,6 +113,11 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       CHECK(o_dim_1 == y_dim_0);
       CHECK(o_data_size == o_dim_0 * o_dim_1);
 
+      // print out the linear layer information
+      std::cout << "Input shape: (" << x_dim_0 << ", " << x_dim_1 << ")" << std::endl;
+      std::cout << "Weight shape: (" << y_dim_0 << ", " << y_dim_1 << ")" << std::endl;
+      std::cout << "Bias shape : (" << z_dim_0 << ", )" << std::endl;
+
 
       /* TODO
        *  - FlexNLP ILA simulator is available in $PATH as "flexnlp_ila_sim"
@@ -173,6 +178,11 @@ class ILAFlexRuntime : public JSONRuntimeBase {
                    << "--is_bias " << "True" << " "
                    << "--dtype " << dtype << " "
                    << "--op_name " << symbol_name_;
+
+      if (getenv("TVM_3LA_REF_RUN")) {
+        LOG(INFO) << "Differential debugging enabled. Getting SW ref results!";
+        call_builder << " " << "--ref_run " << "True";
+      }
       std::string call_cmd = call_builder.str();
 
       LOG(INFO) << "calling flexnlp linear layer driver";
@@ -276,7 +286,10 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       auto node_data_o = data_entry_[EntryID(outputs_[0])];
       CHECK(node_data_o->ndim == 3);
       auto o_data_size = GetDataSize(*node_data_o)/sizeof(float);
-      CHECK(o_data_size == 16*num_v_out*num_ts);
+      CHECK(o_data_size == 16*num_v_out*num_ts)
+        << "output data size: " << o_data_size << " "
+        << "num_v_out: " << num_v_out << " "
+        << "num_ts: " << num_ts;
       float* o_data_ptr = new float[o_data_size];
 
       /* TODO
@@ -363,10 +376,10 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       int mem_idx_enc = 0;
       int mem_idx_dec = 0;
 
-      std::cerr << "dec shape: (" << node_data_dec->shape[0] << ", " << node_data_dec->shape[1] << ", " << node_data_dec->shape[2] << ")\n";
-      std::cerr << "num_v_in: " << num_v_in << "\n";
-      std::cerr << "enc shape: (" << enc_data->shape[0] << ", " << enc_data->shape[1] << ", " << enc_data->shape[2] << ")\n";
-      std::cerr << "num_ts: " << num_ts << "\n";
+      std::cout << "dec shape: (" << node_data_dec->shape[0] << ", " << node_data_dec->shape[1] << ", " << node_data_dec->shape[2] << ")\n";
+      std::cout << "num_v_in: " << num_v_in << "\n";
+      std::cout << "enc shape: (" << enc_data->shape[0] << ", " << enc_data->shape[1] << ", " << enc_data->shape[2] << ")\n";
+      std::cout << "num_ts: " << num_ts << "\n";
 
       // call ILAng-generated simulator
       std::stringstream call_builder;
@@ -409,7 +422,9 @@ class ILAFlexRuntime : public JSONRuntimeBase {
     int64_t ext_dim_1, const int64_t ori_dim_0, const int64_t ori_dim_1, uint8_t dbyte) {
     // This function pad the 2D tensor data in the given dimension
     auto ext_size = ext_dim_0 * ext_dim_1;
-    std::cout << "[extend_data_2d] " << ext_dim_0 << '\t' << ext_dim_1 << '\t' << ext_size << std::endl;
+    std::cout << "[extend_data_2d] dim_0: " << ori_dim_0 << " -> " << ext_dim_0 << '\t' 
+              << "dim_1 from " << ori_dim_1 << " -> " << ext_dim_1 << '\t' 
+              << "extended tensor size: " << ext_size << std::endl;
     ext_data_ptr = std::calloc(ext_size, dbyte);
     for (auto i = 0; i < ori_dim_0; i++) {
       std::memcpy(

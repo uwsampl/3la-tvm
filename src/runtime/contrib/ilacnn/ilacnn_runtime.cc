@@ -126,7 +126,7 @@ class IlaCNNRuntime : public JSONRuntimeBase {
       std::cout << "Data layout: " << data_layout[0] << std::endl;
       std::cout << "Kernel layout: " << kernel_layout[0] << std::endl;
 
-      // TODO: Instantiate and call driver
+      // Instantiate and call driver
       std::string driver_dir = getenv("PY_3LA_DRIVER");
       driver_dir += "/hlscnn";
       std::stringstream call_builder;
@@ -135,7 +135,14 @@ class IlaCNNRuntime : public JSONRuntimeBase {
         << "--out_size " << out_info->shape[1] << " " << out_info->shape[2] << " " << out_info->shape[3] << " "
         << "--kernel_size " << weight_info->shape[0] << " " << weight_info->shape[1] << " "
                             << weight_info->shape[2] << " " << weight_info->shape[3] << " "
-        << "--stride " << strides[0] << " " << strides[1];
+        << "--stride " << strides[0] << " " << strides[1] << " "
+        << "--op_name " << symbol_name_;
+
+      if (getenv("TVM_3LA_REF_RUN")) {
+        LOG(INFO) << "Differential debugging enabled. Getting SW ref results!";
+        call_builder << " " << "--ref_run " << "True";
+      }
+
       std::string call_cmd = call_builder.str();
 
 
@@ -149,7 +156,6 @@ class IlaCNNRuntime : public JSONRuntimeBase {
       retrieve_result(o_data_ptr, o_data_size, "./data/conv_result.txt");
       std::copy(o_data_ptr, o_data_ptr + o_data_size,
                 reinterpret_cast<float*>(out_info->data));
-                
       free(inp_data_ptr);
       free(wgt_data_ptr);
       free(o_data_ptr);
@@ -173,7 +179,7 @@ class IlaCNNRuntime : public JSONRuntimeBase {
     LOG(INFO) << "[Runtime] exit " << symbol_name_ << " runtime, resume host";
   }
 
-  void dump_data(float* data_ptr, unsigned long& size, std::string path) {
+  void dump_data(float* data_ptr, unsigned long size, std::string path) {
     std::ofstream fout;
     std::stringstream ss;
     fout.open(path, std::ios::out | std::ios::trunc);
