@@ -316,7 +316,7 @@ struct StridedSliceAttrs : public tvm::AttrsNode<StridedSliceAttrs> {
   Optional<Array<Integer>> begin;
   Optional<Array<Integer>> end;
   Optional<Array<Integer>> strides;
-  std::string slice_mode;
+  tvm::String slice_mode;
 
   TVM_DECLARE_ATTRS(StridedSliceAttrs, "relay.attrs.StridedSliceAttrs") {
     TVM_ATTR_FIELD(begin).describe("Indices for begin of slice, begin index is also inclusive");
