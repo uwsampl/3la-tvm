@@ -17,9 +17,9 @@
  * under the License.
  */
 
+use crate::ir::attrs::BaseAttrsNode;
 use crate::ir::relay::TString;
 use crate::ir::tir::IntImm;
-use crate::ir::attrs::BaseAttrsNode;
 use crate::ir::PrimExpr;
 use crate::runtime::array::Array;
 use crate::runtime::ObjectRef;
@@ -122,4 +122,19 @@ pub struct TakeAttrsNode {
 pub struct StackAttrsNode {
     pub base: BaseAttrsNode,
     pub axis: IntImm,
+}
+
+// TODO(@gussmith23) How to support Optional type? This "just works" when values
+// are provided for begin/end/strides, but I'm not sure what happens if None is
+// passed from the C++ side.
+#[repr(C)]
+#[derive(Object, Debug)]
+#[ref_name = "StridedSliceAttrs"]
+#[type_key = "relay.attrs.StridedSliceAttrs"]
+pub struct StridedSliceAttrsNode {
+    pub base: BaseAttrsNode,
+    pub begin: Array<IntImm>,
+    pub end: Array<IntImm>,
+    pub strides: Array<IntImm>,
+    pub slice_mode: TString,
 }
