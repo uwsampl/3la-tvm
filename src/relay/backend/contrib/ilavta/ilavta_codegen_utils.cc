@@ -122,6 +122,7 @@ json getAluAsm(int alu_opcode, int uop_bgn, int uop_end, bool use_imm, int imm) 
     case VTA_ALU_OPCODE_MAX: asm_opcode = 1; op_name = "max"; break;
     case VTA_ALU_OPCODE_ADD: asm_opcode = 2; op_name = "add"; break;
     case VTA_ALU_OPCODE_SHR: asm_opcode = 3; op_name = "shr"; break;
+    case 4: asm_opcode = 4; op_name = "mul"; break;
     default:
       fprintf(stderr, "ALU Opcode %d is not valid", alu_opcode);
       exit(-1);

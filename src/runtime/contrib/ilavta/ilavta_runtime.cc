@@ -61,8 +61,12 @@ class ILAVTARuntime : public JSONRuntimeBase {
       auto wgt_eid = EntryID(input_nodes_[1], 0);
       auto& wgt_node_data = data_entry_[wgt_eid];
 
-      auto s_act_eid = EntryID(input_nodes_[2], 0);
-      auto& s_act_data = data_entry_[s_act_eid];
+      auto s_data_eid = EntryID(input_nodes_[2], 0);
+      auto& s_data = data_entry_[s_data_eid];
+      auto s_w_eid = EntryID(input_nodes_[3], 0);
+      auto s_w = data_entry_[s_w_eid];
+      auto s_act_eid = EntryID(input_nodes_[4], 0);
+      auto s_act = data_entry_[s_act_eid];
 
 # if 0
       for (int i = 0; i < input_nodes_.size(); ++i) {
@@ -88,17 +92,22 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
       int8_t* input = reinterpret_cast<int8_t*>(input_node_data->data);
       int8_t* weight = reinterpret_cast<int8_t*>(wgt_node_data->data);
-      float* f32_s_act = reinterpret_cast<float*>(s_act_data->data);
-      double s_act = static_cast<double>(*f32_s_act);
-      auto imm = approximate_scale(s_act);
+      float* scale_data = reinterpret_cast<float*>(s_data->data);
+      float* scale_w = reinterpret_cast<float*>(s_w->data);
+      float* scale_act = reinterpret_cast<float*>(s_act->data);
+      // LOG(INFO) << "S_data: " << (*scale_data) << " " << "S_w: " << (*scale_w) << " " << "S_act: " << (*scale_act);
+      double s_act_val = (*scale_data) * (*scale_w) / (*scale_act);
+      auto imm = approximate_scale(s_act_val);
       int factor = imm[0];
       int nbits = imm[1];
+      LOG(INFO) << "factor = " << factor << " " << "nbits = " << nbits << " approx = " << (double)factor / (double)(1 << nbits);
 
       int8_t* input_buf = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * batch * in_channels, 0));
       int8_t* wgt_buf   = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * out_channels * in_channels, 0));
       int32_t* acc_buf  = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * batch * out_channels, 0));
       VTAUop* uop_buf   = getGEMMUops(batch / VTA_BATCH, in_channels / VTA_BLOCK_IN, out_channels / VTA_BLOCK_OUT);
 
+      // std::cerr << "Input\n";
       for (int i = 0; i < batch; ++i) {
         for (int j = 0; j < in_channels; ++j) {
           if (i >= n_inp_rows || j >= n_inp_cols) {
@@ -107,7 +116,9 @@ class ILAVTARuntime : public JSONRuntimeBase {
           } else {
             input_buf[i * in_channels + j] = input[i * n_inp_cols + j];
           }
+	  // std::cerr << (int)input_buf[i * in_channels + j] << " ";
         }
+	// std::cerr << "\n";
       }
 
       int wgt_ptr_x = 0;
@@ -158,6 +169,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       }
 
 #if 0
+      std::cerr << "Weights:\n";
       for (int i = 0; i < out_channels; ++i) {
         for (int j = 0; j < in_channels; ++j) {
           std::cerr << (int)(wgt_buf[i * in_channels + j]) << " ";
@@ -180,8 +192,8 @@ class ILAVTARuntime : public JSONRuntimeBase {
       std::ifstream fin(ila_asm);
       nlohmann::json asm_data = nlohmann::json::parse(fin);
       fin.close();
-      asm_data[4]["imm"] = factor;
-      asm_data[5]["imm"] = nbits;
+      asm_data["asm"][4]["imm"] = factor;
+      asm_data["asm"][5]["imm"] = nbits;
       std::ofstream fout(ila_asm);
       fout << asm_data;
       fout.close();
@@ -189,6 +201,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       auto output_data = data_entry_[outputs_[0].id_];
       auto output_node = nodes_[outputs_[0].id_];
       auto dtype       = DLDataType2String(output_data->dtype);
+      LOG(INFO) << "Output dtype: " << dtype;
       sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file, GetDataSize(*output_data), batch_size, n_wgt_rows, output_data->data, dtype);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.bias_add") {
       auto input_eid = EntryID(input_nodes_[0], 0);

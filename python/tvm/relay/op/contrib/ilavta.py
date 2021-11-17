@@ -44,7 +44,12 @@ def make_pattern_batch_matmul():
 def make_pattern_dense():
     a = wildcard()
     b = wildcard()
-    return is_op('nn.dense')(a, b)
+    dense_out = is_op('nn.dense')(a, b)
+    dense_cast = is_op('cast')(dense_out, "float32")
+    scale = is_op('multiply')(wildcard(), wildward())
+    dequant_dense = is_op('multiply')(dense_cast, scale)
+    clipped = is_op('clip')(dequant_dense, -127, 127)
+    return is_op('cast')(clipped, "int8")
 
 def make_pattern_bias_add():
     data = wildcard()

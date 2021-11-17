@@ -375,7 +375,7 @@ size_t loadILAOutput(const ila_output_data &out_values, int8_t* buffer, size_t o
 
   size_t data_cur = 0;
   size_t buf_cur = 0;
-  uint32_t temp;
+  int32_t temp;
   for (size_t i = 0; i < out_h; ++i) {
     if (data_cur % VTA_BLOCK_OUT != 0) {
       data_cur = (data_cur / VTA_BLOCK_OUT + 1) * VTA_BLOCK_OUT;
@@ -392,9 +392,12 @@ size_t loadILAOutput(const ila_output_data &out_values, int8_t* buffer, size_t o
 }
 
 void copy_data(int8_t* from_, int8_t* out_data, size_t size) {
+  // std::cerr << "Read back\n";
   for (size_t i = 0; i < size; ++i) {
+    // std::cerr << (int)from_[i] << " ";
     out_data[i] = from_[i];
   }
+  // std::cerr << "\n";
 }
 
 int64_t runSimGetData(std::string pattern_name, std::string driver_dir, std::string ila_asm, std::string data_dump,
@@ -409,7 +412,6 @@ int64_t runSimGetData(std::string pattern_name, std::string driver_dir, std::str
   readILAOutput(output_file, out_data);
 
   int8_t* buffer = new int8_t[output_size];
-  return compile_time;
   auto buf_read = loadILAOutput(out_data, buffer, n_output_rows, n_output_cols);
   // CHECK(buf_read == output_size) << "Output size mismatch: " << buf_read << " v.s. " << output_size;
   copy_data(buffer, reinterpret_cast<int8_t*>(output_data), buf_read);
