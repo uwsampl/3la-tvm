@@ -5,6 +5,7 @@
 #include <dmlc/json.h>
 #include <vta/driver.h>
 #include <vta/hw_spec.h>
+#include <vta/hw_spec_const.h>
 
 #include <cstddef>
 #include <cstdlib>
@@ -106,12 +107,13 @@ int64_t runSimGetData(std::string pattern_name, std::string driver_dir, std::str
 
 // Create a data dump which could be used paired with an ILA ASM to produce
 // the ILA program fragment
-std::string dump_datafile(uint8_t* input_buf, size_t input_size,
-                   uint8_t* weight_buf, size_t weight_size,
-                   uint32_t* acc_buf, size_t acc_size,
+std::string dump_datafile(int8_t* input_buf, size_t input_size,
+                   int8_t* weight_buf, size_t weight_size,
+                   int32_t* acc_buf, size_t acc_size,
                    VTAUop* uop_buf, size_t uop_size,
                    std::string filename);
 
+std::vector<int> approximate_scale(double x);
 }
 }
 }

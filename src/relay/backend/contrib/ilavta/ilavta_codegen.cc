@@ -59,7 +59,8 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
         filename = GetCompiledFilename("dense", info, 3);
         if (this->compiled_func.find(filename) == this->compiled_func.end()) {
           this->compiled_func.insert(filename);
-          filename = CompileGEMM(batch, n_inp_cols, n_wgt_rows, "./prog_frag/" + filename);
+          // `factor` and `nbits` are placeholders for "partial evaluation"
+          filename = CompileGEMM(batch, n_inp_cols, n_wgt_rows, -1, -1, "./prog_frag/" + filename);
         }
       }  else if (name == "ilavta.bias_add") {
         LOG(INFO) << "ilavta.bias_add pattern";
@@ -100,7 +101,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
         filename = GetCompiledFilename("conv1d", input_info, 5);
         if (this->compiled_func.find(filename) == this->compiled_func.end()) {
           this->compiled_func.insert(filename);
-          filename = CompileGEMM(vec_cnt, vec_width, O, "./prog_frag/" + filename);
+          filename = CompileGEMM(vec_cnt, vec_width, O, 1, 0, "./prog_frag/" + filename);
         }
       }
     } else {
