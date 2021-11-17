@@ -174,3 +174,12 @@ pub struct UpSamplingAttrsNode {
     pub method: TString,
     pub align_corners: bool,
 }
+
+#[repr(C)]
+#[derive(Object, Debug)]
+#[ref_name = "DropoutAttrs"]
+#[type_key = "relay.attrs.DropoutAttrs"]
+pub struct DropoutAttrsNode {
+    pub base: BaseAttrsNode,
+    pub rate: f64,
+}

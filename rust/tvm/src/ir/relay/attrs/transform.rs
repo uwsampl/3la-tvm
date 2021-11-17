@@ -17,6 +17,8 @@
  * under the License.
  */
 
+use crate::ir::relay::TString;
+use crate::ir::tir::IntImm;
 use crate::ir::attrs::BaseAttrsNode;
 use crate::ir::PrimExpr;
 use crate::runtime::array::Array;
@@ -99,5 +101,25 @@ pub struct TransposeAttrsNode {
 #[type_key = "relay.attrs.SqueezeAttrs"]
 pub struct SqueezeAttrsNode {
     pub base: BaseAttrsNode,
-    pub axis: Array<IndexExpr>,
+    pub axis: Array<IntImm>,
+}
+
+#[repr(C)]
+#[derive(Object, Debug)]
+#[ref_name = "TakeAttrs"]
+#[type_key = "relay.attrs.TakeAttrs"]
+pub struct TakeAttrsNode {
+    pub base: BaseAttrsNode,
+    pub batch_dims: IntImm,
+    pub axis: IntImm,
+    pub mode: TString,
+}
+
+#[repr(C)]
+#[derive(Object, Debug)]
+#[ref_name = "StackAttrs"]
+#[type_key = "relay.attrs.StackAttrs"]
+pub struct StackAttrsNode {
+    pub base: BaseAttrsNode,
+    pub axis: IntImm,
 }

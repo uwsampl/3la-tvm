@@ -168,7 +168,7 @@ struct GatherNDAttrs : public tvm::AttrsNode<GatherNDAttrs> {
 struct TakeAttrs : public tvm::AttrsNode<TakeAttrs> {
   Integer batch_dims;
   Integer axis;
-  std::string mode;
+  tvm::String mode;
 
   TVM_DECLARE_ATTRS(TakeAttrs, "relay.attrs.TakeAttrs") {
     TVM_ATTR_FIELD(batch_dims)
