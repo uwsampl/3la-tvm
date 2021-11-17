@@ -17,6 +17,8 @@
  * under the License.
  */
 
+use crate::ir::relay::TString;
+use crate::ir::tir::IntImm;
 use crate::ir::attrs::BaseAttrsNode;
 use crate::ir::relay::TString;
 use crate::ir::tir::IntImm;
