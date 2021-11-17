@@ -1,7 +1,6 @@
 #ifndef ILAVTA_CODEGEN_UTILS_H__
 #define ILAVTA_CODEGEN_UTILS_H__
 #include <vta/hw_spec.h>
-#include <vta/hw_spec_const.h>
 #include <vta/driver.h>
 #include <tvm/support/json.hpp>
 #include <fstream>

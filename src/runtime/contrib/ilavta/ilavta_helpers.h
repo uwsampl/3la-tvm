@@ -5,7 +5,6 @@
 #include <dmlc/json.h>
 #include <vta/driver.h>
 #include <vta/hw_spec.h>
-#include <vta/hw_spec_const.h>
 
 #include <cstddef>
 #include <cstdlib>
