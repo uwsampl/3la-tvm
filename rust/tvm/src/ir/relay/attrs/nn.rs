@@ -199,8 +199,9 @@ pub struct BatchMatmulAttrsNode {
 #[ref_name = "LayerNormAttrs"]
 #[type_key = "relay.attrs.LayerNormAttrs"]
 pub struct LayerNormAttrsNode {
-    axis: i32,
-    epsilon: f64,
-    center: bool,
-    scale: bool,
+    pub base: BaseAttrsNode,
+    pub axis: i32,
+    pub epsilon: f64,
+    pub center: bool,
+    pub scale: bool,
 }
