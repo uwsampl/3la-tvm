@@ -174,3 +174,34 @@ pub struct UpSamplingAttrsNode {
     pub method: TString,
     pub align_corners: bool,
 }
+
+#[repr(C)]
+#[derive(Object, Debug)]
+#[ref_name = "DropoutAttrs"]
+#[type_key = "relay.attrs.DropoutAttrs"]
+pub struct DropoutAttrsNode {
+    pub base: BaseAttrsNode,
+    pub rate: f64,
+}
+
+#[repr(C)]
+#[derive(Object, Debug)]
+#[ref_name = "BatchMatmulAttrs"]
+#[type_key = "relay.attrs.BatchMatmulAttrs"]
+pub struct BatchMatmulAttrsNode {
+    pub base: BaseAttrsNode,
+    pub auto_scheduler_rewritten_layout: TString,
+    pub out_dtype: DataType,
+}
+
+#[repr(C)]
+#[derive(Object, Debug)]
+#[ref_name = "LayerNormAttrs"]
+#[type_key = "relay.attrs.LayerNormAttrs"]
+pub struct LayerNormAttrsNode {
+    pub base: BaseAttrsNode,
+    pub axis: i32,
+    pub epsilon: f64,
+    pub center: bool,
+    pub scale: bool,
+}
