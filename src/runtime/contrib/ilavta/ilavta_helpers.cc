@@ -312,12 +312,15 @@ std::vector<int> approximate_scale(double x) {
   int nbits = nbits_l;
   if (round_up_d - d < d - round_down_d) {
     nbits = nbits_r;
+  } else {
+    nbits = nbits_l;
+    round_up_d = round_down_d;
   }
   double fact = (double)round_up_d / (double)d;
   double n_scaled = (double)n * fact;
   int round_up_n = round(n_scaled);
-  int div = gcd(round_up_n, round_up_d);
-  std::vector<int> result = {round_up_n / div, nbits};
+  // int div = gcd(round_up_n, round_up_d);
+  std::vector<int> result = {round_up_n, nbits};
   return result;
 }
 
@@ -392,12 +395,12 @@ size_t loadILAOutput(const ila_output_data &out_values, int8_t* buffer, size_t o
 }
 
 void copy_data(int8_t* from_, int8_t* out_data, size_t size) {
-  // std::cerr << "Read back\n";
+  std::cerr << "Read back\n";
   for (size_t i = 0; i < size; ++i) {
-    // std::cerr << (int)from_[i] << " ";
+    std::cerr << (int)from_[i] << " ";
     out_data[i] = from_[i];
   }
-  // std::cerr << "\n";
+  std::cerr << "\n";
 }
 
 int64_t runSimGetData(std::string pattern_name, std::string driver_dir, std::string ila_asm, std::string data_dump,
