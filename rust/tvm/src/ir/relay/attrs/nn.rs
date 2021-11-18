@@ -193,3 +193,14 @@ pub struct BatchMatmulAttrsNode {
     pub auto_scheduler_rewritten_layout: TString,
     pub out_dtype: DataType,
 }
+
+#[repr(C)]
+#[derive(Object, Debug)]
+#[ref_name = "LayerNormAttrs"]
+#[type_key = "relay.attrs.LayerNormAttrs"]
+pub struct LayerNormAttrsNode {
+    axis: i32,
+    epsilon: f64,
+    center: bool,
+    scale: bool,
+}
