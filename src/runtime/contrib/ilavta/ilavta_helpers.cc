@@ -514,9 +514,9 @@ size_t loadILAOutput(const ila_output_data& out_values, int8_t* buffer, size_t o
   size_t buf_cur = 0;
   int32_t temp;
   for (size_t i = 0; i < out_h; ++i) {
-    if (data_cur % VTA_BLOCK_OUT != 0) {
-      data_cur = (data_cur / VTA_BLOCK_OUT + 1) * VTA_BLOCK_OUT;
-    }
+    // if (data_cur % VTA_BLOCK_OUT != 0) {
+    //   data_cur = (data_cur / VTA_BLOCK_OUT + 1) * VTA_BLOCK_OUT;
+    // }
     for (size_t j = 0; j < out_w; ++j) {
       auto val = out_values[data_cur++].at("data");
       std::stringstream ss;

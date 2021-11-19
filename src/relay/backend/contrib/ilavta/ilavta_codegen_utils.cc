@@ -152,7 +152,7 @@ std::string write_to_file(const std::string& filename, const json& data) {
 
 std::string CompileGEMM(int batch, size_t n_inp_cols, size_t n_wgt_rows, int factor, int nbits, std::string filename) {
     int batch_size = batch;
-    batch = VTA_BLOCK_OUT;
+    batch = VTA_BLOCK_IN;
     int in_dim = 1;
     int out_dim = 1;
     int in_channels = in_dim * VTA_BLOCK_IN;
@@ -162,8 +162,8 @@ std::string CompileGEMM(int batch, size_t n_inp_cols, size_t n_wgt_rows, int fac
     prog_frag["asm"] = json::array({});
     auto& prog = prog_frag["asm"];
     prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_UOP, 0, 0, 1, uop_size));
-    prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_WGT, 0, 0, out_dim * in_dim, 1));
-    prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_INP, 0, 0, batch * in_dim, 1));
+    prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_WGT, 0, 0, 1, 1));
+    prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_INP, 0, 0, VTA_BLOCK_IN, 1));
     prog.push_back(getGEMMAsm(0, uop_size));
     prog.push_back(getAluAsm(4 /* VTA_ALU_OPCODE_MUL */, 0, uop_size, 1, factor));
     prog.push_back(getAluAsm(VTA_ALU_OPCODE_SHR, 0, uop_size, 1, nbits));

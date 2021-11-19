@@ -124,15 +124,22 @@ class ILAVTARuntime : public JSONRuntimeBase {
                 memset(out_inter, 0, sizeof(int8_t) * VTA_BLOCK_OUT * VTA_BLOCK_IN);
                 memset(input_buf, 0, sizeof(int8_t) * VTA_BLOCK_OUT * VTA_BLOCK_IN);
                 memset(wgt_buf, 0, sizeof(int8_t) * VTA_BLOCK_OUT * VTA_BLOCK_IN);
+		std::cout << "inp_rows " << inp_rows << " inp_cols " << inp_cols << " wgt_rows " << wgt_rows << "\n";
+		std::cout << "input block\n"; 
                 for (int i = block_h; i < (block_h + VTA_BLOCK_OUT < batch_size ? block_h + VTA_BLOCK_OUT : batch_size); ++i) {
                   for (int k = block_w; k < (block_w + VTA_BLOCK_IN < n_inp_cols ? block_w + VTA_BLOCK_IN : n_inp_cols); ++k) {
                     input_buf[inp_size++] = input[i * n_inp_cols + k];
+		    std::cout << (int)input_buf[inp_size - 1] << " "; 
                   }
+		  std::cout << "\n";
                 }
+		std::cout << "\n\n WGT buf:\n";
                 for (int j = block_k ; j < (block_k + VTA_BLOCK_OUT < n_wgt_rows ? block_k + VTA_BLOCK_OUT : n_wgt_rows); ++j) {
                   for (int k = block_w; k < (block_w + VTA_BLOCK_IN < n_inp_cols ? block_w + VTA_BLOCK_IN : n_inp_cols); ++k) {
                     wgt_buf[wgt_size++] = weight[j * n_wgt_cols + k];
+		    std::cout << (int)wgt_buf[wgt_size - 1] <<" ";
                   }
+		  std::cout << "\n";
                 }
                 // for (int i = block_h; i < (block_h + VTA_BLOCK_OUT < batch_size ? block_h + VTA_BLOCK_OUT : batch_size); ++i) {
                 //     for (int j = block_k ; j < (block_k + VTA_BLOCK_OUT < n_wgt_rows ? block_k + VTA_BLOCK_OUT : n_wgt_rows); ++j) {
@@ -143,8 +150,8 @@ class ILAVTARuntime : public JSONRuntimeBase {
                 //         }
                 //     }
                 // }
-                std::string data_file = dump_datafile(input_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
-                          wgt_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
+                std::string data_file = dump_datafile(input_buf, inp_rows * inp_cols,
+                          wgt_buf, wgt_rows * inp_cols,
                           nullptr, 0,
                           uop_buf, uop_size,
                           "ilavta_dense");
@@ -157,6 +164,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
                 std::ofstream fout(ila_asm);
                 fout << asm_data;
                 fout.close();
+		LOG(INFO) << "Size" << GetDataSize(*output_data) << " " << batch * n_wgt_rows;
                 sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file,
                            inp_rows * wgt_rows, inp_rows, wgt_rows, out_inter, "int8_t");
                 int ptr = 0;
