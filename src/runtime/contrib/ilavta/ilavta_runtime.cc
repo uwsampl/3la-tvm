@@ -161,7 +161,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
                 // fin.close();
                 // asm_data["asm"][4]["imm"] = factor;
                 // asm_data["asm"][5]["imm"] = nbits;
-                nlohmann::json asm_data = get_gemm(1, VTA_BLOCK_IN, VTA_BLOCK_OUT, factor, nbits);
+                nlohmann::json asm_data = get_gemm(inp_rows, inp_cols, wgt_rows, factor, nbits);
                 std::ofstream fout(ila_asm);
                 fout << asm_data;
                 fout.close();

@@ -525,7 +525,7 @@ void readILAOutput(const std::string filename, ila_output_data& out_values) {
   }
 }
 
-json CompileGEMM(int batch, size_t n_inp_cols, size_t n_wgt_rows, int factor, int nbits, std::string filename) {
+json get_gemm(int batch, size_t n_inp_cols, size_t n_wgt_rows, int factor, int nbits) {
     size_t in_dim = n_inp_cols % VTA_BLOCK_IN != 0 ? n_inp_cols / VTA_BLOCK_IN + 1 : n_inp_cols / VTA_BLOCK_IN;
     size_t out_dim = n_wgt_rows % VTA_BLOCK_OUT != 0 ? n_wgt_rows / VTA_BLOCK_OUT + 1 : n_wgt_rows / VTA_BLOCK_OUT;
     size_t uop_size = batch * in_dim * out_dim;
