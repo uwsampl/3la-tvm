@@ -102,8 +102,8 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int nbits = imm[1];
       LOG(INFO) << "factor = " << factor << " " << "nbits = " << nbits << " approx = " << (double)factor / (double)(1 << nbits);
 
-      int8_t* input_buf = reinterpret_cast<int8_t *>(malloc(sizeof(int8_t) * VTA_BLOCK_IN * VTA_BLOCK_OUT));
-      int8_t* wgt_buf   = reinterpret_cast<int8_t *>(malloc(sizeof(int8_t) * VTA_BLOCK_IN * VTA_BLOCK_OUT));
+      int8_t* input_buf = new int8_t[VTA_BLOCK_IN * VTA_BLOCK_OUT];
+      int8_t* wgt_buf   = new int8_t[VTA_BLOCK_IN * VTA_BLOCK_OUT];
       auto output_data = data_entry_[outputs_[0].id_];
       auto output_node = nodes_[outputs_[0].id_];
       int8_t* out_buf = reinterpret_cast<int8_t*>(output_data->data);
