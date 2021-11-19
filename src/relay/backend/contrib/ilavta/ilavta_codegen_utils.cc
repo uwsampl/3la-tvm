@@ -114,7 +114,7 @@ json get2DLoadStoreAsm(int opcode, int mem_type, int sram_id, int dram_id, int y
   }
 }
 
-json getAluAsm(int alu_opcode, int uop_bgn, int uop_end, bool use_imm, int imm) {
+json getAluAsm(int alu_opcode, int uop_bgn, int uop_end, bool use_imm, uint16_t imm) {
   int asm_opcode = -1;
   std::string op_name = "";
   switch (alu_opcode) {
