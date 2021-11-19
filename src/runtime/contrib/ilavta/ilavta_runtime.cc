@@ -110,33 +110,39 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int8_t* out_inter = new int8_t[VTA_BLOCK_OUT * VTA_BLOCK_OUT];
       VTAUop* uop_buf   = getGEMMUops(VTA_BLOCK_OUT, 1, 1);
 
-      std::vector<int> set_indices;
-
-      int32_t* result = new int32_t[batch * n_wgt_rows];
-      memset(result, 0, sizeof(int) * batch * n_wgt_rows);
+      int32_t* acc_buf = new int32_t[batch * n_wgt_rows];
+      memset(acc_buf, 0, sizeof(int) * batch * n_wgt_rows);
 
       for (int block_h = 0; block_h < batch_size; block_h += VTA_BLOCK_IN) {
         for (int block_k = 0; block_k < n_wgt_rows; block_k += VTA_BLOCK_IN) {
             for (int block_w = 0; block_w < n_inp_cols; block_w += VTA_BLOCK_OUT) {
                 int inp_size = 0;
                 int wgt_size = 0;
-                int inp_rows = (block_h + VTA_BLOCK_OUT < batch_size ? VTA_BLOCK_OUT : batch_size - block_h + 1);
-                int inp_cols = (block_w + VTA_BLOCK_IN < n_inp_cols ? VTA_BLOCK_IN : n_inp_cols - block_w + 1);
-                int wgt_rows = (block_k + VTA_BLOCK_OUT < n_wgt_rows ? VTA_BLOCK_OUT : n_wgt_rows - block_k + 1);
-                set_indices.clear();
+                int inp_rows = (block_h + VTA_BLOCK_OUT < batch_size ? VTA_BLOCK_OUT : batch_size) - block_h;
+                int inp_cols = (block_w + VTA_BLOCK_IN < n_inp_cols ? VTA_BLOCK_IN : n_inp_cols) - block_w;
+                int wgt_rows = (block_k + VTA_BLOCK_OUT < n_wgt_rows ? VTA_BLOCK_OUT : n_wgt_rows) - block_k;
                 memset(out_inter, 0, sizeof(int8_t) * VTA_BLOCK_OUT * VTA_BLOCK_IN);
                 memset(input_buf, 0, sizeof(int8_t) * VTA_BLOCK_OUT * VTA_BLOCK_IN);
                 memset(wgt_buf, 0, sizeof(int8_t) * VTA_BLOCK_OUT * VTA_BLOCK_IN);
                 for (int i = block_h; i < (block_h + VTA_BLOCK_OUT < batch_size ? block_h + VTA_BLOCK_OUT : batch_size); ++i) {
-                    for (int j = block_k ; j < (block_k + VTA_BLOCK_OUT < n_wgt_rows ? block_k + VTA_BLOCK_OUT : n_wgt_rows); ++j) {
-                        for (int k = block_w; k < (block_w + VTA_BLOCK_IN < n_inp_cols ? block_w + VTA_BLOCK_IN : n_inp_cols); ++k) {
-                            set_indices.push_back(i * n_wgt_rows + j);
-                            result[i * n_wgt_rows + j] += input[i * n_inp_cols + k] * weight[j * n_wgt_cols + k];
-                            input_buf[inp_size++] = input[i * n_inp_cols + k];
-                            wgt_buf[wgt_size++] = weight[j * n_wgt_cols + k];
-                        }
-                    }
+                  for (int k = block_w; k < (block_w + VTA_BLOCK_IN < n_inp_cols ? block_w + VTA_BLOCK_IN : n_inp_cols); ++k) {
+                    input_buf[inp_size++] = input[i * n_inp_cols + k];
+                  }
                 }
+                for (int j = block_k ; j < (block_k + VTA_BLOCK_OUT < n_wgt_rows ? block_k + VTA_BLOCK_OUT : n_wgt_rows); ++j) {
+                  for (int k = block_w; k < (block_w + VTA_BLOCK_IN < n_inp_cols ? block_w + VTA_BLOCK_IN : n_inp_cols); ++k) {
+                    wgt_buf[wgt_size++] = weight[j * n_wgt_cols + k];
+                  }
+                }
+                // for (int i = block_h; i < (block_h + VTA_BLOCK_OUT < batch_size ? block_h + VTA_BLOCK_OUT : batch_size); ++i) {
+                //     for (int j = block_k ; j < (block_k + VTA_BLOCK_OUT < n_wgt_rows ? block_k + VTA_BLOCK_OUT : n_wgt_rows); ++j) {
+                //         for (int k = block_w; k < (block_w + VTA_BLOCK_IN < n_inp_cols ? block_w + VTA_BLOCK_IN : n_inp_cols); ++k) {
+                //             result[i * n_wgt_rows + j] += input[i * n_inp_cols + k] * weight[j * n_wgt_cols + k];
+                //             input_buf[inp_size++] = input[i * n_inp_cols + k];
+                //             wgt_buf[wgt_size++] = weight[j * n_wgt_cols + k];
+                //         }
+                //     }
+                // }
                 std::string data_file = dump_datafile(input_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
                           wgt_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
                           nullptr, 0,
@@ -152,29 +158,24 @@ class ILAVTARuntime : public JSONRuntimeBase {
                 fout << asm_data;
                 fout.close();
                 sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file,
-                           inp_rows * wgt_rows, batch_size, n_wgt_rows, out_inter, "int8_t");
+                           inp_rows * wgt_rows, inp_rows, wgt_rows, out_inter, "int8_t");
                 int ptr = 0;
-                for (int idx: set_indices) {
-                  out_buf[idx] = out_inter[ptr++];
+                for (int i = block_h; i < (block_h + VTA_BLOCK_OUT < batch_size ? block_h + VTA_BLOCK_OUT : batch_size); ++i) {
+                  for (int j = block_k ; j < (block_k + VTA_BLOCK_OUT < n_wgt_rows ? block_k + VTA_BLOCK_OUT : n_wgt_rows); ++j) {
+                    int imm = static_cast<int>(out_inter[ptr++]);
+                    imm = imm << nbits;
+                    imm = imm / factor;
+                    acc_buf[i * n_wgt_cols + j] += imm;
+                  }
                 }
             }
         }
       }
-      // for (int i = 0; i < batch; ++i) {
-      //   for (int j = 0; j < n_inp_rows; ++j) {
-      //     int res = ((result[i * n_inp_rows + j] * factor) >> nbits);
-      //     res = res > 127 ? 127 : res;
-      //     res = res < -127 ? -127 : res;
-      //     out_buf[i * n_inp_rows + j] = static_cast<int8_t>(res);
-      //   }
-      // }
-      // LOG(INFO) << "Result:";
-      // for (int i = 0; i < batch; ++i) {
-      //   for (int j = 0; j < n_inp_rows; ++j) {
-      //     std::cerr << result[i * n_inp_rows + j] << " ";
-      //   }
-      //   std::cerr << "\n";
-      // }
+      for (int i = 0; i < batch; ++i) {
+        for (int j = 0; j < n_wgt_rows; ++j) {
+          out_buf[i * n_wgt_rows + j] = (acc_buf[i * n_wgt_cols + j] * factor) >> nbits;
+        }
+      }
 
       // std::string data_file = dump_datafile(input_buf, batch * in_channels,
       //               wgt_buf, in_channels * out_channels,
