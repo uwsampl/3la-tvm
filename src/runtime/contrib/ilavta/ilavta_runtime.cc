@@ -111,6 +111,21 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
       std::vector<int> set_indices; 
 
+      int32_t* result = new int32_t[batch * n_wgt_rows];
+      memset(result, 0, sizeof(int) * batch * n_wgt_rows);
+
+      LOG(INFO) << "Reference:";
+      for (int i = 0; i < batch; ++i) {
+        for (int j = 0; j < n_wgt_rows; ++j) {
+          int sum = 0;
+          for (int k = 0; k < n_inp_cols; ++k) {
+            sum += input[i * n_inp_cols + k] * weight[j * n_inp_cols + k];
+          }
+          std::cerr << sum << " ";
+        }
+        std::cerr << "\n";
+      }
+
       for (int block_h = 0; block_h < batch_size; block_h += VTA_BLOCK_IN) {
         for (int block_k = 0; block_k < n_wgt_rows; block_k += VTA_BLOCK_IN) {
             for (int block_w = 0; block_w < n_inp_cols; block_w += VTA_BLOCK_OUT) {
@@ -120,17 +135,19 @@ class ILAVTARuntime : public JSONRuntimeBase {
                     int sum = 0;
                     for (int j = block_k ; j < (block_k + VTA_BLOCK_OUT < n_wgt_rows ? block_k + VTA_BLOCK_OUT : n_wgt_rows); ++j) {
                         for (int k = block_w; k < (block_w + VTA_BLOCK_IN < n_inp_cols ? block_w + VTA_BLOCK_IN : n_inp_cols); ++k) {
-                            sum += input[i * n_inp_cols + k] * weight[j * n_wgt_cols + k];
+                            result[i * n_wgt_rows + j] += input[i * n_inp_cols + k] * weight[j * n_wgt_cols + k];
                         }
                     }
-                    sum *= factor;
-                    sum >>= nbits;
-                    sum = sum > 127 ? 127 : sum;
-                    sum = sum < -127 ? -127 : sum;
-                    out_buf[i * n_wgt_rows + j] = static_cast<int8_t>(sum);
                 }
             }
         }
+      }
+      LOG(INFO) << "Result:";
+      for (int i = 0; i < batch; ++i) {
+        for (int j = 0; j < n_inp_rows; ++j) {
+          std::cerr << result[i * n_inp_rows + j] << " ";
+        }
+        std::cerr << "\n";
       }
           // std::string data_file = dump_datafile(input_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
           //           wgt_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
