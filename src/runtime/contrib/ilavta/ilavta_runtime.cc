@@ -109,27 +109,29 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int8_t* out_buf = reinterpret_cast<int8_t*>(output_data->data);
       VTAUop* uop_buf   = getGEMMUops(batch / VTA_BATCH, 1, 1);
 
-      for (int block_batch = 0; block_batch < n_inp_rows; block_batch += VTA_BLOCK_IN) {
-        for (int block_h = 0; block_h < n_wgt_rows; block_h += VTA_BLOCK_IN) {
-          for (int block_w = 0; block_w < n_inp_cols; block_w += VTA_BLOCK_IN) {
-            int in_h, in_w, w_h, w_w;
-            in_h = in_w = w_h = w_w = 0;
-            // Matmul a block
-            for (int i = block_batch; i < (block_batch + VTA_BLOCK_IN < n_inp_rows ? block_batch + VTA_BLOCK_IN : n_inp_rows); ++i) {
-              in_h += 1;
-              int sum = 0;
-              for (int j = block_h ; j < (block_h + VTA_BLOCK_OUT < n_wgt_rows ? block_h + VTA_BLOCK_OUT : n_wgt_rows); ++j) {
-                for (int k = block_w; k < (block_w + VTA_BLOCK_IN < n_inp_cols ? block_w + VTA_BLOCK_IN : n_inp_cols); ++k) {
-                  input_buf[i * VTA_BLOCK_IN + k] = input[i * VTA_BLOCK_IN + k];
-                  wgt_buf[j * VTA_BLOCK_IN + k] = weight[j * VTA_BLOCK_IN + k];
-                  sum += input[i * VTA_BLOCK_IN + k] * weight[j * VTA_BLOCK_IN + k];
+      std::vector<int> set_indices; 
+
+      for (int block_h = 0; block_h < batch_size; block_h += VTA_BLOCK_IN) {
+        for (int block_k = 0; block_k < n_wgt_rows; block_k += VTA_BLOCK_IN) {
+            for (int block_w = 0; block_w < n_inp_cols; block_w += VTA_BLOCK_OUT) {
+                int inp_size = 0;
+                int wgt_size = 0;
+                for (int i = block_h; i < (block_h + VTA_BLOCK_OUT < batch_size ? block_h + VTA_BLOCK_OUT : batch); ++i) {
+                    int sum = 0;
+                    for (int j = block_k ; j < (block_k + VTA_BLOCK_OUT < n_wgt_rows ? block_k + VTA_BLOCK_OUT : n_wgt_rows); ++j) {
+                        for (int k = block_w; k < (block_w + VTA_BLOCK_IN < n_inp_cols ? block_w + VTA_BLOCK_IN : n_inp_cols); ++k) {
+                            sum += input[i * n_inp_cols + k] * weight[j * n_wgt_cols + k];
+                        }
+                    }
+                    sum *= factor;
+                    sum >>= nbits;
+                    sum = sum > 127 ? 127 : sum;
+                    sum = sum < -127 ? -127 : sum;
+                    out_buf[i * n_wgt_rows + j] = static_cast<int8_t>(sum);
                 }
-                sum *= factor;
-                sum >>= nbits;
-                out_buf[i * n_wgt_rows + j] = sum;
-              }
             }
-          }
+        }
+      }
           // std::string data_file = dump_datafile(input_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
           //           wgt_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
           //           nullptr, 0,
@@ -151,8 +153,6 @@ class ILAVTARuntime : public JSONRuntimeBase {
           // auto output_node = nodes_[outputs_[0].id_];
           // auto dtype       = DLDataType2String(output_data->dtype);
           // sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file, GetDataSize(*output_data), batch_size, n_wgt_rows, output_data->data, dtype);
-        }
-      }
 
       // std::string data_file = dump_datafile(input_buf, batch * in_channels,
       //               wgt_buf, in_channels * out_channels,
