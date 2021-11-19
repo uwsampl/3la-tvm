@@ -506,6 +506,103 @@ void readILAOutput(const std::string filename, ila_output_data& out_values) {
   }
 }
 
+json get_gemm(int batch, int in_channels, int out_channels, int factor, int nbits) {
+  int uop_size = batch / VTA_BATCH * in_channels / VTA_BLOCK_IN * out_channels / VTA_BLOCK_OUT;
+  int inp_size = batch / VTA_BATCH * in_channels / VTA_BLOCK_IN;
+  int wgt_size = in_channels / VTA_BLOCK_IN * out_channels / VTA_BLOCK_OUT;
+  int out_size = batch / VTA_BATCH * out_channels / VTA_BLOCK_OUT;
+  json prog_frag = {};
+  prog_frag["asm"] = json::array({});
+  auto& prog = prog_frag["asm"];
+  // Load uops
+  // insn_buf[insn_idx++] = get1DLoadStoreInsn(
+  //     VTA_OPCODE_LOAD,
+  //     VTA_MEM_ID_UOP,
+  //     0,
+  //     0,
+  //     uop_size,
+  //     0,
+  //     0,
+  //     0,
+  //     0);
+  prog_frag.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD,
+                                        VTA_MEM_ID_UOP,
+                                        0, 0, 1, uop_size, 0, 0, 0));
+  // Load bias
+  // insn_buf[insn_idx++] = get1DLoadStoreInsn(
+  //     VTA_OPCODE_LOAD,                                    // opcode
+  //     VTA_MEM_ID_ACC,                                     // type
+  //     0,                                                  // sram offset
+  //     0,                                                  // dram offset
+  //     out_size,                                           // size
+  //     0,                                                  // pop prev dep
+  //     0,                                                  // pop next dep
+  //     1,                                                  // push prev dep
+  //     0);                                                 // push next dep
+  prog_frag.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD,
+                                      VTA_MEM_ID_ACC,
+                                      0, 0, 1, out_size, 0, 0, 0));
+  // Load weight block (pop next)
+  // insn_buf[insn_idx++] = get1DLoadStoreInsn(
+  //     VTA_OPCODE_LOAD,                                    // opcode
+  //     VTA_MEM_ID_WGT,                                     // type
+  //     0,                                                  // sram offset
+  //     0,                                                  // dram offset
+  //     wgt_size,                                           // size
+  //     0,                                                  // pop prev dep
+  //     1,                                                  // pop next dep
+  //     0,                                                  // push prev dep
+  //     0);                                                 // push next dep
+  prog_frag.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD,
+                                      VTA_MEM_ID_WGT,
+                                      0, 0, 1, wgt_size, 0, 0, 0));
+  // Load input block (push next)
+  // insn_buf[insn_idx++] = get1DLoadStoreInsn(
+  //     VTA_OPCODE_LOAD,                                    // opcode
+  //     VTA_MEM_ID_INP,                                     // type
+  //     0,                                                  // sram offset
+  //     0,                                                  // dram offset
+  //     inp_size,                                           // size
+  //     0,                                                  // pop prev dep
+  //     0,                                                  // pop next dep
+  //     0,                                                  // push prev dep
+  //     1);                                                 // push next dep
+  prog_frag.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD,
+                                      VTA_MEM_ID_INP,
+                                      0, 0, 1, inp_size, 0, 0, 0));
+  // Perform GEMM (pop prev, push prev if not last, push next if last)
+  // insn_buf[insn_idx++] = getGEMMInsn(
+  //     0,                                                  // uop offset
+  //     batch / VTA_BATCH,                                  // batch
+  //     in_channels / VTA_BLOCK_IN,                         // in_channels
+  //     out_channels / VTA_BLOCK_OUT,                       // out_channels
+  //     uop_compression,                                    // uop_compression
+  //     1,                                                  // pop_prev_dep
+  //     0,                                                  // pop_next_dep
+  //     0,                                                  // push prev dep
+  //     1);                                                 // push_next_dep
+  prog_frag.push_back(getGEMMAsm(0, batch / VTA_BATCH, 
+                  in_channels / VTA_BLOCK_IN, out_channels / VTA_BLOCK_OUT));
+  // Store output block (pop prev, push prev if not last)
+  // insn_buf[insn_idx++] = get1DLoadStoreInsn(
+  //     VTA_OPCODE_STORE,                                   // opcode
+  //     VTA_MEM_ID_OUT,                                     // type
+  //     0,                                                  // sram offset
+  //     0,                                                  // dram offset
+  //     out_size,                                           // size
+  //     1,                                                  // pop prev dep
+  //     0,                                                  // pop next dep
+  //     1,                                                  // push prev dep
+  //     0);                                                 // push next dep
+  prog.push_back(getAluAsm(4 /* VTA_ALU_OPCODE_MUL */, 0, uop_size, 1, factor));
+  prog.push_back(getAluAsm(VTA_ALU_OPCODE_SHR, 0, uop_size, 1, nbits));
+  prog.push_back(getAluAsm(VTA_ALU_OPCODE_MAX, 0, uop_size, 1, -127));
+  prog.push_back(getAluAsm(VTA_ALU_OPCODE_MIN, 0, uop_size, 1, 127));
+prog_frag.push_back(get2DLoadStoreAsm(VTA_OPCODE_STORE,
+                                      VTA_MEM_ID_OUT,
+                                      0, 0, 1, out_size, 0, 0, 0));
+}
+
 size_t loadILAOutput(const ila_output_data& out_values, int8_t* buffer, size_t out_h,
                      size_t out_w) {
   LOG(INFO) << "[Runtime] Copying from output json to byte buffer";
@@ -514,9 +611,9 @@ size_t loadILAOutput(const ila_output_data& out_values, int8_t* buffer, size_t o
   size_t buf_cur = 0;
   int32_t temp;
   for (size_t i = 0; i < out_h; ++i) {
-    // if (data_cur % VTA_BLOCK_OUT != 0) {
-    //   data_cur = (data_cur / VTA_BLOCK_OUT + 1) * VTA_BLOCK_OUT;
-    // }
+    if (data_cur % VTA_BLOCK_OUT != 0) {
+      data_cur = (data_cur / VTA_BLOCK_OUT + 1) * VTA_BLOCK_OUT;
+    }
     for (size_t j = 0; j < out_w; ++j) {
       auto val = out_values[data_cur++].at("data");
       std::stringstream ss;
