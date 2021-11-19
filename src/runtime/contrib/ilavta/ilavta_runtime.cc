@@ -108,7 +108,6 @@ class ILAVTARuntime : public JSONRuntimeBase {
       auto output_node = nodes_[outputs_[0].id_];
       int8_t* out_buf = reinterpret_cast<int8_t*>(output_data->data);
       int8_t* out_inter = new int8_t[VTA_BLOCK_OUT * VTA_BLOCK_OUT];
-      VTAUop* uop_buf   = getGEMMUops(VTA_BLOCK_OUT, 1, 1);
 
       int32_t* acc_buf = new int32_t[batch * n_wgt_rows];
       memset(acc_buf, 0, sizeof(int) * batch * n_wgt_rows);
@@ -150,7 +149,8 @@ class ILAVTARuntime : public JSONRuntimeBase {
                 //         }
                 //     }
                 // }
-                std::string data_file = dump_datafile(input_buf, inp_rows * inp_cols,
+                VTAUop* uop_buf   = getGEMMUops(VTA_BLOCK_IN / VTA_BATCH, in_channels / VTA_BLOCK_IN, out_channels / VTA_BLOCK_OUT);
+                std::string data_file = dump_datafile(input_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
                           wgt_buf, wgt_rows * inp_cols,
                           nullptr, 0,
                           uop_buf, uop_size,
