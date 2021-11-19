@@ -102,118 +102,79 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int nbits = imm[1];
       LOG(INFO) << "factor = " << factor << " " << "nbits = " << nbits << " approx = " << (double)factor / (double)(1 << nbits);
 
-      int8_t* input_buf = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * batch * in_channels, 0));
-      int8_t* wgt_buf   = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * out_channels * in_channels, 0));
-      int32_t* acc_buf  = reinterpret_cast<int32_t *>(VTAMemAlloc(sizeof(int32_t) * batch * out_channels, 0));
-      VTAUop* uop_buf   = getGEMMUops(batch / VTA_BATCH, in_channels / VTA_BLOCK_IN, out_channels / VTA_BLOCK_OUT);
+      int8_t* input_buf = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * VTA_BLOCK_IN * VTA_BLOCK_OUT, 0));
+      int8_t* wgt_buf   = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * VTA_BLOCK_IN * VTA_BLOCK_OUT, 0));
+      auto output_data = data_entry_[outputs_[0].id_];
+      auto output_node = nodes_[outputs_[0].id_];
+      int8_t* out_buf = reinterpret_cast<int8_t*>(output_data->data);
+      VTAUop* uop_buf   = getGEMMUops(batch / VTA_BATCH, 1, 1);
 
-      // std::cerr << "Input\n";
-      for (int i = 0; i < batch; ++i) {
-        for (int j = 0; j < in_channels; ++j) {
-          if (i >= n_inp_rows || j >= n_inp_cols) {
-            // zero padding
-            input_buf[i * in_channels + j] = 0;
-          } else {
-            input_buf[i * in_channels + j] = input[i * n_inp_cols + j];
+      for (int block_batch = 0; block_batch < n_inp_rows; block_batch += VTA_BLOCK_IN) {
+        for (int block_h = 0; block_h < n_wgt_rows; block_h += VTA_BLOCK_IN) {
+          for (int block_w = 0; block_w < n_inp_cols; block_w += VTA_BLOCK_IN) {
+            int in_h, in_w, w_h, w_w;
+            in_h = in_w = w_h = w_w = 0;
+            // Matmul a block
+            for (int i = block_batch; i < (block_batch + VTA_BLOCK_IN < n_inp_rows ? block_batch + VTA_BLOCK_IN : n_inp_rows); ++i) {
+              in_h += 1;
+              int sum = 0;
+              for (int j = block_h ; j < (block_h + VTA_BLOCK_OUT < n_wgt_rows ? block_h + VTA_BLOCK_OUT : n_wgt_rows); ++j) {
+                for (int k = block_w; k < (block_w + VTA_BLOCK_IN < n_inp_cols ? block_w + VTA_BLOCK_IN : n_inp_cols); ++k) {
+                  input_buf[i * VTA_BLOCK_IN + k] = input[i * VTA_BLOCK_IN + k];
+                  wgt_buf[j * VTA_BLOCK_IN + k] = weight[j * VTA_BLOCK_IN + k];
+                  sum += input[i * VTA_BLOCK_IN + k] * weight[j * VTA_BLOCK_IN + k];
+                }
+                sum *= factor;
+                sum >>= nbits;
+                out_buf[i * n_wgt_rows + j] = sum;
+              }
+            }
           }
-	  // std::cerr << (int)input_buf[i * in_channels + j] << " ";
-        }
-	// std::cerr << "\n";
-      }
-
-      for (int i = 0; i < out_channels; ++i) {
-        for (int j = 0; j < in_channels; ++j) {
-          if (i >= n_wgt_rows || j >= n_wgt_cols) {
-            wgt_buf[i * in_channels + j] = 0;
-          } else {
-            wgt_buf[i * in_channels + j] = weight[i * n_wgt_cols + j];
-          }
-        }
-      }
-
-      // int wgt_ptr_x = 0;
-      // int wgt_ptr_y = 0;
-
-      /*
-      * Split the weight according submatrices with the dimension
-      * VTA_BLOCK_OUT* VTA_BLOCK_IN and flatten each block by rows
-      * For instance a 4 by 4 matrix
-      *         1 2 3 4
-      *         5 6 7 8
-      *         9 A B C
-      *         D E F G
-      * will become
-      *         1 2 5 6
-      *         3 4 7 8
-      *         9 A D E
-      *         B C F G
-      * if VTA_BLOCK_OUT and VTA_BLOCK_IN are equal to 2.
-      * Zero-padding applies when there are not enough elements in a block
-      * that fills up VTA_BLOCK_OUT * VTA_BLOCK_IN elements.
-      * For example, using the above matrix, if VTA_BLOCK_OUT and VTA_BLOCK_IN are 3, the
-      * resulting weight buffer will be
-      *         1 2 3 5 6 7 9 A B
-      *         4 0 0 8 0 0 C 0 0
-      *         D E F 0 0 0 0 0 0
-      *         G 0 0 0 0 0 0 0 0
-      * */
-      // for (int i = 0; i < n_wgt_rows; i += VTA_BLOCK_OUT) {
-      //   for (int j = 0; j < n_wgt_cols; j += VTA_BLOCK_IN) {
-      //     // Flatten a block into weight buffer
-      //     for (int x = i; x < i + VTA_BLOCK_OUT; ++x) {
-      //       for (int y = j; y < j + VTA_BLOCK_IN; ++y) {
-      //         if (x >= n_wgt_rows || y >= n_wgt_cols) {
-      //           // zero padding
-      //           wgt_buf[wgt_ptr_x * in_channels + wgt_ptr_y] = 0;
-      //         } else {
-      //           wgt_buf[wgt_ptr_x * in_channels + wgt_ptr_y] = weight[x * n_wgt_cols + y];
-      //         }
-      //         wgt_ptr_y++;
-      //         if (wgt_ptr_y == in_channels) {
-      //           wgt_ptr_y = 0;
-      //           wgt_ptr_x++;
-      //         }
-      //       }
-      //     }
-      //   }
-      // }
-
-#if 1
-      std::cerr << "Weights:\n";
-      for (int i = 0; i < out_channels; ++i) {
-        for (int j = 0; j < in_channels; ++j) {
-          std::cerr << (int)(wgt_buf[i * in_channels + j]) << " ";
-        }
-        std::cerr << std::endl;
-      }
-#endif
-
-      for (int i = 0; i < batch * out_channels; ++i) {
-        acc_buf[i] = 0;
-      }
-
-      std::string data_file = dump_datafile(input_buf, batch * in_channels,
-                    wgt_buf, in_channels * out_channels,
-                    nullptr, 0,
-                    uop_buf, uop_size,
-                    "ilavta_dense");
+          // std::string data_file = dump_datafile(input_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
+          //           wgt_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
+          //           nullptr, 0,
+          //           uop_buf, uop_size,
+          //           "ilavta_dense");
       
-      std::string ila_asm = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
+          // std::string ila_asm = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
+          // std::ifstream fin(ila_asm);
+          // nlohmann::json asm_data = nlohmann::json::parse(fin);
+          // fin.close();
+          // asm_data["asm"][4]["imm"] = factor;
+          // asm_data["asm"][5]["imm"] = nbits;
+          // // nlohmann::json asm_data = get_blocked_gemm(batch, in_channels, VTA_BLOCK_OUT * 2, false, 1, factor, nbits);
+          // std::ofstream fout(ila_asm);
+          // fout << asm_data;
+          // fout.close();
+
+          // auto output_data = data_entry_[outputs_[0].id_];
+          // auto output_node = nodes_[outputs_[0].id_];
+          // auto dtype       = DLDataType2String(output_data->dtype);
+          // sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file, GetDataSize(*output_data), batch_size, n_wgt_rows, output_data->data, dtype);
+        }
+      }
+
+      // std::string data_file = dump_datafile(input_buf, batch * in_channels,
+      //               wgt_buf, in_channels * out_channels,
+      //               nullptr, 0,
+      //               uop_buf, uop_size,
+      //               "ilavta_dense");
+      
+      // std::string ila_asm = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
       // std::ifstream fin(ila_asm);
       // nlohmann::json asm_data = nlohmann::json::parse(fin);
       // fin.close();
       // asm_data["asm"][4]["imm"] = factor;
       // asm_data["asm"][5]["imm"] = nbits;
-      nlohmann::json asm_data = get_blocked_gemm(batch, in_channels, VTA_BLOCK_OUT * 2, false, 1, factor, nbits);
-      std::ofstream fout(ila_asm);
-      fout << asm_data;
-      fout.close();
+      // // nlohmann::json asm_data = get_blocked_gemm(batch, in_channels, VTA_BLOCK_OUT * 2, false, 1, factor, nbits);
+      // std::ofstream fout(ila_asm);
+      // fout << asm_data;
+      // fout.close();
 
-      auto output_data = data_entry_[outputs_[0].id_];
-      auto output_node = nodes_[outputs_[0].id_];
-      auto dtype       = DLDataType2String(output_data->dtype);
-      LOG(INFO) << "Output dtype: " << dtype;
-      sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file, GetDataSize(*output_data), batch_size, n_wgt_rows, output_data->data, dtype);
+      // auto output_data = data_entry_[outputs_[0].id_];
+      // auto output_node = nodes_[outputs_[0].id_];
+      // auto dtype       = DLDataType2String(output_data->dtype);
+      // sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file, GetDataSize(*output_data), batch_size, n_wgt_rows, output_data->data, dtype);
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.bias_add") {
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto bias_eid = EntryID(input_nodes_[1], 0);
