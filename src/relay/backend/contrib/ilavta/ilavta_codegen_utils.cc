@@ -152,9 +152,9 @@ std::string write_to_file(const std::string& filename, const json& data) {
 
 std::string CompileGEMM(int batch, size_t n_inp_cols, size_t n_wgt_rows, int factor, int nbits, std::string filename) {
     int batch_size = batch;
-    batch = batch_size * VTA_BATCH;
-    int in_dim = n_inp_cols % VTA_BLOCK_IN != 0 ? n_inp_cols / VTA_BLOCK_IN + 1 : n_inp_cols / VTA_BLOCK_IN;
-    int out_dim = n_wgt_rows % VTA_BLOCK_OUT != 0 ? n_wgt_rows / VTA_BLOCK_OUT + 1 : n_wgt_rows / VTA_BLOCK_OUT;
+    batch = VTA_BLOCK_OUT;
+    int in_dim = 1;
+    int out_dim = 1;
     int in_channels = in_dim * VTA_BLOCK_IN;
     int out_channels = out_dim * VTA_BLOCK_OUT;
     size_t uop_size = batch / VTA_BATCH * in_channels / VTA_BLOCK_IN * out_channels / VTA_BLOCK_OUT;
