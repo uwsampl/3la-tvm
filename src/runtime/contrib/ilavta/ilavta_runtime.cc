@@ -114,17 +114,17 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int32_t* result = new int32_t[batch * n_wgt_rows];
       memset(result, 0, sizeof(int) * batch * n_wgt_rows);
 
-      LOG(INFO) << "Reference:";
-      for (int i = 0; i < batch; ++i) {
-        for (int j = 0; j < n_wgt_rows; ++j) {
-          int sum = 0;
-          for (int k = 0; k < n_inp_cols; ++k) {
-            sum += input[i * n_inp_cols + k] * weight[j * n_inp_cols + k];
-          }
-          std::cerr << sum << " ";
-        }
-        std::cerr << "\n";
-      }
+      // LOG(INFO) << "Reference:";
+      // for (int i = 0; i < batch; ++i) {
+      //   for (int j = 0; j < n_wgt_rows; ++j) {
+      //     int sum = 0;
+      //     for (int k = 0; k < n_inp_cols; ++k) {
+      //       sum += input[i * n_inp_cols + k] * weight[j * n_inp_cols + k];
+      //     }
+      //     std::cerr << sum << " ";
+      //   }
+      //   std::cerr << "\n";
+      // }
 
       for (int block_h = 0; block_h < batch_size; block_h += VTA_BLOCK_IN) {
         for (int block_k = 0; block_k < n_wgt_rows; block_k += VTA_BLOCK_IN) {
@@ -142,13 +142,21 @@ class ILAVTARuntime : public JSONRuntimeBase {
             }
         }
       }
-      LOG(INFO) << "Result:";
       for (int i = 0; i < batch; ++i) {
         for (int j = 0; j < n_inp_rows; ++j) {
-          std::cerr << result[i * n_inp_rows + j] << " ";
+          int res = ((result[i * n_inp_rows + j] * factor) >> nbits);
+          res = res > 127 ? 127 : res;
+          res = res < -127 ? -127 : res;
+          out_buf[i * n_inp_rows + j] = static_cast<int8_t>(res);
         }
-        std::cerr << "\n";
       }
+      // LOG(INFO) << "Result:";
+      // for (int i = 0; i < batch; ++i) {
+      //   for (int j = 0; j < n_inp_rows; ++j) {
+      //     std::cerr << result[i * n_inp_rows + j] << " ";
+      //   }
+      //   std::cerr << "\n";
+      // }
           // std::string data_file = dump_datafile(input_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
           //           wgt_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
           //           nullptr, 0,
