@@ -123,6 +123,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
                 memset(out_inter, 0, sizeof(int8_t) * VTA_BLOCK_OUT * VTA_BLOCK_IN);
                 memset(input_buf, 0, sizeof(int8_t) * VTA_BLOCK_OUT * VTA_BLOCK_IN);
                 memset(wgt_buf, 0, sizeof(int8_t) * VTA_BLOCK_OUT * VTA_BLOCK_IN);
+                memset(out_inter, 0, VTA_BLOCK_IN * VTA_BLOCK_OUT);
 		std::cout << "inp_rows " << inp_rows << " inp_cols " << inp_cols << " wgt_rows " << wgt_rows << "\n";
 		std::cout << "input block\n"; 
                 for (int i = block_h; i < (block_h + VTA_BLOCK_OUT < batch_size ? block_h + VTA_BLOCK_OUT : batch_size); ++i) {
@@ -140,34 +141,66 @@ class ILAVTARuntime : public JSONRuntimeBase {
                   }
 		  std::cout << "\n";
                 }
-                // for (int i = block_h; i < (block_h + VTA_BLOCK_OUT < batch_size ? block_h + VTA_BLOCK_OUT : batch_size); ++i) {
-                //     for (int j = block_k ; j < (block_k + VTA_BLOCK_OUT < n_wgt_rows ? block_k + VTA_BLOCK_OUT : n_wgt_rows); ++j) {
-                //         for (int k = block_w; k < (block_w + VTA_BLOCK_IN < n_inp_cols ? block_w + VTA_BLOCK_IN : n_inp_cols); ++k) {
-                //             result[i * n_wgt_rows + j] += input[i * n_inp_cols + k] * weight[j * n_wgt_cols + k];
-                //             input_buf[inp_size++] = input[i * n_inp_cols + k];
-                //             wgt_buf[wgt_size++] = weight[j * n_wgt_cols + k];
-                //         }
-                //     }
-                // }
-                VTAUop* uop_buf   = getGEMMUops(VTA_BLOCK_IN / VTA_BATCH, in_channels / VTA_BLOCK_IN, out_channels / VTA_BLOCK_OUT);
-                std::string data_file = dump_datafile(input_buf, VTA_BLOCK_IN * VTA_BLOCK_OUT,
-                          wgt_buf, wgt_rows * inp_cols,
+                int block_batch = inp_cols;
+                block_batch = block_batch * VTA_BATCH;
+                int block_in_dim = inp_cols % VTA_BLOCK_IN != 0 ? inp_cols / VTA_BLOCK_IN + 1 : inp_cols / VTA_BLOCK_IN;
+                int block_out_dim = wgt_rows % VTA_BLOCK_OUT != 0 ? wgt_rows / VTA_BLOCK_OUT + 1 : wgt_rows / VTA_BLOCK_OUT;
+                int block_in_channels = block_in_dim * VTA_BLOCK_IN;
+                int block_out_channels = block_out_dim * VTA_BLOCK_OUT;
+
+                int8_t* block_inp_buf = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * block_batch * block_in_channels, 0));
+                int8_t* block_wgt_buf = reinterpret_cast<int8_t *>(VTAMemAlloc(sizeof(int8_t) * block_out_channels * block_in_channels, 0));
+
+                int uop_size = VTA_BLOCK_OUT;
+                for (int i = 0; i < block_batch; ++i) {
+                  for (int j = 0; j < block_in_channels; ++j) {
+                    if (i >= n_inp_rows || j >= inp_cols) {
+                      // zero padding
+                      block_inp_buf[i * block_in_channels + j] = 0;
+                    } else {
+                      block_inp_buf[i * block_in_channels + j] = input_buf[i * inp_cols + j];
+                    }
+              // std::cerr << (int)input_buf[i * in_channels + j] << " ";
+                  }
+            // std::cerr << "\n";
+                }
+
+                int wgt_ptr_x = 0;
+                int wgt_ptr_y = 0;
+                for (int i = 0; i < wgt_rows; i += VTA_BLOCK_OUT) {
+                  for (int j = 0; j < inp_cols; j += VTA_BLOCK_IN) {
+                    // Flatten a block into weight buffer
+                    for (int x = i; x < i + VTA_BLOCK_OUT; ++x) {
+                      for (int y = j; y < j + VTA_BLOCK_IN; ++y) {
+                        if (x >= wgt_rows || y >= inp_cols) {
+                          // zero padding
+                          block_wgt_buf[wgt_ptr_x * block_in_channels + wgt_ptr_y] = 0;
+                        } else {
+                          block_wgt_buf[wgt_ptr_x * block_in_channels + wgt_ptr_y] = wgt_buf[x * inp_cols + y];
+                        }
+                        wgt_ptr_y++;
+                        if (wgt_ptr_y == block_in_channels) {
+                          wgt_ptr_y = 0;
+                          wgt_ptr_x++;
+                        }
+                      }
+                    }
+                  }
+                }
+                VTAUop* uop_buf   = getGEMMUops(block_batch / VTA_BATCH, block_in_channels / VTA_BLOCK_IN, block_out_channels / VTA_BLOCK_OUT);
+                std::string data_file = dump_datafile(block_inp_buf, block_batch * block_in_channels,
+                          block_wgt_buf, block_out_channels * block_in_channels,
                           nullptr, 0,
                           uop_buf, uop_size,
                           "ilavta_dense");
                 std::string ila_asm = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
-                // std::ifstream fin(ila_asm);
-                // nlohmann::json asm_data = nlohmann::json::parse(fin);
-                // fin.close();
-                // asm_data["asm"][4]["imm"] = factor;
-                // asm_data["asm"][5]["imm"] = nbits;
                 nlohmann::json asm_data = get_gemm(inp_rows, inp_cols, wgt_rows, factor, nbits);
                 std::ofstream fout(ila_asm);
                 fout << asm_data;
                 fout.close();
 		            LOG(INFO) << "Size " << GetDataSize(*output_data) << " " << batch * n_wgt_rows;
                 sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file,
-                           inp_rows * wgt_rows, inp_rows, wgt_rows, out_inter, "int8_t");
+                           inp_rows * wgt_rows, block_batch, wgt_rows, out_inter, "int8_t");
                 int ptr = 0;
                 for (int i = block_h; i < (block_h + VTA_BLOCK_OUT < batch_size ? block_h + VTA_BLOCK_OUT : batch_size); ++i) {
                   for (int j = block_k ; j < (block_k + VTA_BLOCK_OUT < n_wgt_rows ? block_k + VTA_BLOCK_OUT : n_wgt_rows); ++j) {
