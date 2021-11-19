@@ -2,6 +2,7 @@
 #define ILAVTA_HELPERS_H__
 #include <tvm/runtime/ndarray.h>
 #include <tvm/runtime/registry.h>
+#include <tvm/support/json.hpp>
 #include <dmlc/json.h>
 #include <vta/driver.h>
 #include <vta/hw_spec.h>
@@ -19,6 +20,7 @@ namespace runtime {
 namespace contrib {
 
 using ila_output_data = std::vector<std::unordered_map<std::string, std::string> >;
+using namespace nlohmann;
 
 /*
 * Code adopted from https://github.com/apache/tvm-vta/blob/main/tests/hardware/common/test_lib.cc
@@ -113,6 +115,9 @@ std::string dump_datafile(int8_t* input_buf, size_t input_size,
                    std::string filename);
 
 std::vector<int> approximate_scale(double x);
+
+json get_blocked_gemm(int batch, int channels,
+                      int block, bool uop_compression, int virtual_threads, int factor, int nbits);
 }
 }
 }

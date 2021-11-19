@@ -121,8 +121,18 @@ class ILAVTARuntime : public JSONRuntimeBase {
 	// std::cerr << "\n";
       }
 
-      int wgt_ptr_x = 0;
-      int wgt_ptr_y = 0;
+      for (int i = 0; i < out_channels; ++i) {
+        for (int j = 0; j < in_channels; ++j) {
+          if (i >= n_wgt_rows || j >= n_wgt_cols) {
+            wgt_buf[i * in_channels + j] = 0;
+          } else {
+            wgt_buf[i * in_channels + j] = weight[i * n_wgt_cols + j];
+          }
+        }
+      }
+
+      // int wgt_ptr_x = 0;
+      // int wgt_ptr_y = 0;
 
       /*
       * Split the weight according submatrices with the dimension
@@ -147,28 +157,28 @@ class ILAVTARuntime : public JSONRuntimeBase {
       *         D E F 0 0 0 0 0 0
       *         G 0 0 0 0 0 0 0 0
       * */
-      for (int i = 0; i < n_wgt_rows; i += VTA_BLOCK_OUT) {
-        for (int j = 0; j < n_wgt_cols; j += VTA_BLOCK_IN) {
-          // Flatten a block into weight buffer
-          for (int x = i; x < i + VTA_BLOCK_OUT; ++x) {
-            for (int y = j; y < j + VTA_BLOCK_IN; ++y) {
-              if (x >= n_wgt_rows || y >= n_wgt_cols) {
-                // zero padding
-                wgt_buf[wgt_ptr_x * in_channels + wgt_ptr_y] = 0;
-              } else {
-                wgt_buf[wgt_ptr_x * in_channels + wgt_ptr_y] = weight[x * n_wgt_cols + y];
-              }
-              wgt_ptr_y++;
-              if (wgt_ptr_y == in_channels) {
-                wgt_ptr_y = 0;
-                wgt_ptr_x++;
-              }
-            }
-          }
-        }
-      }
+      // for (int i = 0; i < n_wgt_rows; i += VTA_BLOCK_OUT) {
+      //   for (int j = 0; j < n_wgt_cols; j += VTA_BLOCK_IN) {
+      //     // Flatten a block into weight buffer
+      //     for (int x = i; x < i + VTA_BLOCK_OUT; ++x) {
+      //       for (int y = j; y < j + VTA_BLOCK_IN; ++y) {
+      //         if (x >= n_wgt_rows || y >= n_wgt_cols) {
+      //           // zero padding
+      //           wgt_buf[wgt_ptr_x * in_channels + wgt_ptr_y] = 0;
+      //         } else {
+      //           wgt_buf[wgt_ptr_x * in_channels + wgt_ptr_y] = weight[x * n_wgt_cols + y];
+      //         }
+      //         wgt_ptr_y++;
+      //         if (wgt_ptr_y == in_channels) {
+      //           wgt_ptr_y = 0;
+      //           wgt_ptr_x++;
+      //         }
+      //       }
+      //     }
+      //   }
+      // }
 
-#if 0
+#if 1
       std::cerr << "Weights:\n";
       for (int i = 0; i < out_channels; ++i) {
         for (int j = 0; j < in_channels; ++j) {
@@ -189,11 +199,12 @@ class ILAVTARuntime : public JSONRuntimeBase {
                     "ilavta_dense");
       
       std::string ila_asm = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
-      std::ifstream fin(ila_asm);
-      nlohmann::json asm_data = nlohmann::json::parse(fin);
-      fin.close();
-      asm_data["asm"][4]["imm"] = factor;
-      asm_data["asm"][5]["imm"] = nbits;
+      // std::ifstream fin(ila_asm);
+      // nlohmann::json asm_data = nlohmann::json::parse(fin);
+      // fin.close();
+      // asm_data["asm"][4]["imm"] = factor;
+      // asm_data["asm"][5]["imm"] = nbits;
+      nlohmann::json asm_data = get_blocked_gemm(batch, in_channels, VTA_BLOCK_OUT * 2, false, 1, factor, nbits);
       std::ofstream fout(ila_asm);
       fout << asm_data;
       fout.close();
