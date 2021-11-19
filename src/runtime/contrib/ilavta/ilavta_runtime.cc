@@ -156,15 +156,16 @@ class ILAVTARuntime : public JSONRuntimeBase {
                           uop_buf, uop_size,
                           "ilavta_dense");
                 std::string ila_asm = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
-                std::ifstream fin(ila_asm);
-                nlohmann::json asm_data = nlohmann::json::parse(fin);
-                fin.close();
-                asm_data["asm"][4]["imm"] = factor;
-                asm_data["asm"][5]["imm"] = nbits;
+                // std::ifstream fin(ila_asm);
+                // nlohmann::json asm_data = nlohmann::json::parse(fin);
+                // fin.close();
+                // asm_data["asm"][4]["imm"] = factor;
+                // asm_data["asm"][5]["imm"] = nbits;
+                nlohmann::json asm_data = get_gemm(1, VTA_BLOCK_IN, VTA_BLOCK_OUT, factor, nbits);
                 std::ofstream fout(ila_asm);
                 fout << asm_data;
                 fout.close();
-		LOG(INFO) << "Size" << GetDataSize(*output_data) << " " << batch * n_wgt_rows;
+		            LOG(INFO) << "Size " << GetDataSize(*output_data) << " " << batch * n_wgt_rows;
                 sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file,
                            inp_rows * wgt_rows, inp_rows, wgt_rows, out_inter, "int8_t");
                 int ptr = 0;

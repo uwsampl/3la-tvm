@@ -115,6 +115,8 @@ std::string dump_datafile(int8_t* input_buf, size_t input_size,
                    std::string filename);
 
 std::vector<int> approximate_scale(double x);
+
+json get_gemm(int batch, int in_channels, int out_channels, int factor, int nbits);
 }
 }
 }
