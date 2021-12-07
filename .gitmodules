@@ -13,6 +13,3 @@
 [submodule "3rdparty/cutlass"]
 	path = 3rdparty/cutlass
 	url = https://github.com/NVIDIA/cutlass
-[submodule "3rdparty/vta-hw"]
-	path = 3rdparty/vta-hw
-	url = git@github.com:apache/tvm-vta.git
