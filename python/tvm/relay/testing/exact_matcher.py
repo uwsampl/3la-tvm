@@ -8,46 +8,58 @@ from tvm import relay
 from tvm.relay.expr_functor import ExprFunctor, ExprMutator
 from tvm.relay.analysis import free_vars, bound_vars
 
+# very silly because there is no way to check if the checked_type field is populated
+# without triggering the exception
+def has_type_annotation(expr):
+    try:
+        expr.checked_type
+        return True
+    except ValueError:
+        return False
+
+
+class Deduplicator(ExprMutator):
+    def __init__(self, var_map=None):
+        super().__init__()
+        self.var_map = {} if var_map is None else var_map
+
+    def visit_var(self, var):
+        if var in self.var_map:
+            return self.var_map[var]
+        fresh_var = relay.Var(var.name_hint)
+        self.var_map[var] = fresh_var
+        return fresh_var
+
+    def visit_pattern(self, pattern):
+        if isinstance(pattern, relay.PatternWildcard):
+            return pattern
+        if isinstance(pattern, relay.PatternVar):
+            return relay.PatternVar(self.visit(pattern.var))
+        if isinstance(pattern, relay.PatternTuple):
+            return relay.PatternTuple([self.visit_pattern(subpattern)
+                                       for subpattern in pattern.patterns])
+        if isinstance(pattern, relay.PatternConstructor):
+            return relay.PatternConstructor(pattern.constructor,
+                                            [self.visit_pattern(subpattern)
+                                             for subpattern in pattern.patterns])
+        raise ValueError(f"Invalid pattern {pattern}")
+
+    def visit_match(self, match):
+        new_val = self.visit(match.data)
+        clauses = [relay.Clause(self.visit_pattern(c.lhs), self.visit(c.rhs))
+                   for c in match.clauses]
+        return relay.Match(new_val, clauses)
+
+
 # dumb copy of what src/relay/transforms/de_duplicate.cc is doing
 def deduplicate_vars(expr):
     """
     Given the expr, replace all vars in the expression with fresh ones.
     This is done to preserve well-formedness in Relay (all var definitions must be unique)
     """
-    class Deduplicator(ExprMutator):
-        def __init__(self):
-            super().__init__()
-            self.var_map = {}
-
-        def visit_var(self, var):
-            if var in self.var_map:
-                return self.var_map[var]
-            fresh_var = relay.Var(var.name_hint)
-            self.var_map[var] = fresh_var
-            return fresh_var
-
-        def visit_pattern(self, pattern):
-            if isinstance(pattern, relay.PatternWildcard):
-                return pattern
-            if isinstance(pattern, relay.PatternVar):
-                return relay.PatternVar(self.visit(pattern.var))
-            if isinstance(pattern, relay.PatternTuple):
-                return relay.PatternTuple([self.visit_pattern(subpattern)
-                                           for subpattern in pattern.patterns])
-            if isinstance(pattern, relay.PatternConstructor):
-                return relay.PatternConstructor(pattern.constructor,
-                                                [self.visit_pattern(subpattern)
-                                                 for subpattern in pattern.patterns])
-            raise ValueError(f"Invalid pattern {pattern}")
-
-        def visit_match(self, match):
-            new_val = self.visit(match.data)
-            clauses = [relay.Clause(self.visit_pattern(c.lhs), self.visit(c.rhs))
-                       for c in match.clauses]
-            return relay.Match(new_val, clauses)
-
     dedup = Deduplicator()
     return dedup.visit(expr)
+
 
 def check_match(template, target):
     """
@@ -291,7 +303,7 @@ class MatchMutator(ExprMutator):
         self.composite_counter = composite_counter
         self.callback = (lambda expr: True) if callback is None else callback
 
-    def extract_target(self, match_args):
+    def extract_target(self, match_args, target_type=None):
         """
         If we found a match for our target, this will
         produce a call to a BYOC-annotated version of the target
@@ -308,18 +320,40 @@ class MatchMutator(ExprMutator):
                 # note: b1 ... bn are the free vars from the target
             })(a1, ..., an)
         })(match_args[0], ..., match_args[n-1])
+
+        If a target type is specified and the match arguments have type annotations,
+        the functions will be type-annotated (easier on the type checker)
         """
         match_ordering = [match_args[v] for v in self.target_vars]
+
+        include_annotation = (target_type is not None) and all(map(has_type_annotation, match_ordering))
+        arg_types = [None] * len(match_ordering)
+        if include_annotation:
+            arg_types = list(map(lambda v: v.checked_type, match_ordering))
 
         # we have to deduplicate vars for Relay's well-formedness check
         # (all var definitions must be unique)
         inner_body = deduplicate_vars(self.target)
         inner_args = free_vars(inner_body)
-        inner_func = relay.Function(inner_args, inner_body)
+
+        # if we want to annotate the argument types, we have to map the free vars
+        # to versions of the free vars with the appropriate type annotations
+        if include_annotation:
+            new_args = []
+            arg_mapping = {}
+            for i, arg in enumerate(inner_args):
+                new_arg = relay.Var(arg.name_hint, type_annotation=arg_types[i])
+                new_args.append(new_arg)
+                arg_mapping[arg] = new_arg
+            dedup = Deduplicator(var_map=arg_mapping)
+            inner_body = dedup.visit(inner_body)
+            inner_args = new_args
+
+        inner_func = relay.Function(inner_args, inner_body, ret_type=target_type)
 
         inner_func = inner_func.with_attr("Composite", self.composite_name)
-        outer_args = [relay.Var(f"outer_arg_{i}") for i in range(len(inner_args))]
-        outer_func = relay.Function(outer_args, inner_func(*outer_args))
+        outer_args = [relay.Var(f"outer_arg_{i}", type_annotation=arg_types[i]) for i in range(len(inner_args))]
+        outer_func = relay.Function(outer_args, inner_func(*outer_args), ret_type=target_type)
         outer_func = outer_func.with_attr("Compiler", self.compiler_name)
         outer_func = outer_func.with_attr("Primitive", tvm.tir.IntImm("int32", 1))
         outer_func = outer_func.with_attr(
@@ -342,9 +376,13 @@ class MatchMutator(ExprMutator):
         found_match, match_args = check_match(self.target, expr)
         # only permit the match if the callback is true
         if found_match and self.callback(expr):
+            target_type = None
+            if has_type_annotation(expr):
+                target_type = expr.checked_type
+
             # need to check for matches in the match args too
             final_args = {var: self.visit(arg) for var, arg in match_args.items()}
-            return self.extract_target(final_args)
+            return self.extract_target(final_args, target_type=target_type)
         return super().visit(expr)
 
 
