@@ -12,4 +12,4 @@
   url = https://github.com/tlc-pack/libbacktrace.git
 [submodule "3rdparty/vta-hw"]
 	path = 3rdparty/vta-hw
-	url = git@github.com:uwsampl/3la-vta.git
+	url = git@github.com:apache/tvm-vta.git
