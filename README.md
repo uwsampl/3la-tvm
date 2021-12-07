@@ -19,14 +19,6 @@ This is a fork of TVM for adding BYOC integrations for the 3LA project.
 
 Right now we have a VTA integration in `src/relay/backend/contrib/ilavta`. Note that you have to include the line `SET(USE_ILAVTA_CODEGEN ON)` in `build/config.cmake` before building TVM to support this (other flags that should be on: `USE_LLVM`, `USE_VTA_FSIM`). We have a test of this backend in `tests/python/relay/test_external_codegen.py` (see `test_extern_vta()`).
 
-This version also uses a fork of the VTA repo meant to dump logs.
-Try `vta/python/integration/matmul_tutorial.py` to use the dumping facility.
-VTA can be set into dumping mode by calling `vta.testing.simulator.dump_mode(True)`.
-You can specify the location at which the dump will be deposited using `vta.testing.simulator.dump_target(path)`; the default is `./vta_sim_dump.json`.
-See the readme at [the VTA fork](https://github.com/uwsampl/3la-vta) to see a description of the dumping mode and the dumping format.
-
-You can use `vta.testing.ila_converter.convert(dump_file, dest_file)` to convert a VTA simulator dump into an ILA program fragment.
-
 # 3LA environment setup
 
 ## Docker setup
