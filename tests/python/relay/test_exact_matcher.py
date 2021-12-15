@@ -442,6 +442,49 @@ def test_linear_layer_case():
     assert check_annotations(first_call.op.body)
 
 
+def test_type_annotations():
+    def linear_definition(batch_size, in_features, out_features, num_call=0):
+        weight = relay.var(f'weight_{num_call}', relay.TensorType((out_features, in_features), 'float32'))
+        bias   = relay.var(f'bias_{num_call}', relay.TensorType((out_features, ), 'float32'))
+        inp    = relay.var(f'input', relay.TensorType((batch_size, in_features)))
+        return relay.Function([inp], relay.nn.bias_add(relay.nn.dense(inp, weight), bias))
+
+    batch_size = 8
+    in_features = 10
+    out_features = 12
+
+    x = relay.Var("x")
+    mod = tvm.IRModule.from_expr(linear_definition(batch_size, in_features, out_features)(x))
+    mod = relay.transform.InferType()(mod)
+
+    # we will match a linear layer pattern and expect the matched pattern to preserve the types
+    linear_pattern = linear_definition(batch_size, in_features, out_features).body
+    main_mut = annotate_exact_matches(mod["main"], linear_pattern, 'ilaflex', 'ilaflex.linear')
+    mod_mut = tvm.IRModule.from_expr(main_mut)
+    mod_mut = relay.transform.InferType()(mod_mut)
+    final_main = mod_mut["main"]
+
+    # structure of body: Call(fun(input) {Call(annotated_function, ...)}, input)
+    outermost_call = final_main.body
+    assert isinstance(outermost_call.op, relay.Function)
+    assert len(outermost_call.args) == 1
+
+    outer_func = outermost_call.op
+    assert check_annotations(outer_func.body)
+    inner_func = outer_func.body.op
+    assert inner_func.ret_type == outer_func.checked_type.ret_type
+    innermost_func = inner_func.body.op
+    assert innermost_func.ret_type == outer_func.ret_type
+
+    # free arg order is input, weight, bias
+    assert inner_func.params[0].type_annotation == relay.TensorType((batch_size, in_features))
+    assert inner_func.params[1].type_annotation == relay.TensorType((out_features, in_features))
+    assert inner_func.params[2].type_annotation == relay.TensorType((out_features,))
+
+    assert innermost_func.params[0].type_annotation == relay.TensorType((batch_size, in_features))
+    assert innermost_func.params[1].type_annotation == relay.TensorType((out_features, in_features))
+    assert innermost_func.params[2].type_annotation == relay.TensorType((out_features,))
+
 
 if __name__ == "__main__":
     test_match_misses()
@@ -461,3 +504,4 @@ if __name__ == "__main__":
     test_multiple_matches()
     test_operator_callback()
     test_linear_layer_case()
+    test_type_annotations()
