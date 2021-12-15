@@ -309,12 +309,19 @@ class MatchMutator(ExprMutator):
         produce a call to a BYOC-annotated version of the target
         with the pattern-arguments as args to the call
 
+        The nested function will include annotations naming the arguments
+        in case the codegen can use that information (e.g., avoid redundant loads/stores).
+        For names, it uses structural hashes in cases the name hints for vars clash.
+
         Format:
         (fn(a1, ..., an, attrs={Compiler: compiler_name}) {
             (fn(b1, ..., bn, attrs={
                 Composite: composite_name
                 Primitive: 1
                 global_symbol: composite_name+counter
+                arg_0_id: [structural hash of a1]
+                ...
+                arg_n_id: [structural hash of an]
             }) {
                 target expression
                 # note: b1 ... bn are the free vars from the target
@@ -330,6 +337,8 @@ class MatchMutator(ExprMutator):
         arg_types = [None] * len(match_ordering)
         if include_annotation:
             arg_types = list(map(lambda v: v.checked_type, match_ordering))
+
+        match_names = [str(tvm.ir.structural_hash(v, map_free_vars=False)) for v in match_ordering]
 
         # we have to deduplicate vars for Relay's well-formedness check
         # (all var definitions must be unique)
@@ -352,6 +361,9 @@ class MatchMutator(ExprMutator):
         inner_func = relay.Function(inner_args, inner_body, ret_type=target_type)
 
         inner_func = inner_func.with_attr("Composite", self.composite_name)
+        for i, name in enumerate(match_names):
+            inner_func = inner_func.with_attr(f"arg_{i}_id", name)
+
         outer_args = [relay.Var(f"outer_arg_{i}", type_annotation=arg_types[i]) for i in range(len(inner_args))]
         outer_func = relay.Function(outer_args, inner_func(*outer_args), ret_type=target_type)
         outer_func = outer_func.with_attr("Compiler", self.compiler_name)
