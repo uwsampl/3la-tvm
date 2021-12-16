@@ -1,5 +1,4 @@
 #include <tvm/node/reflection.h>
-#include <tvm/runtime/container.h>
 #include <tvm/runtime/ndarray.h>
 #include <tvm/runtime/registry.h>
 #include <tvm/support/json.hpp>
