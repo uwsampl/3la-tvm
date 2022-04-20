@@ -211,6 +211,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
     // else if (nodes_[outputs_[0].id_].GetOpName() == "ilaflex.lstm") {
       LOG(INFO) << "[Runtime] operator name is " << nodes_[outputs_[0].id_].GetOpName();
       LOG(INFO) << "LSTM input nodes size: " << input_nodes_.size();
+      CHECK(input_nodes_.size() == 6) << "wrong input nodes number for LSTM operator";
       // TODO: why initial state only has single vector?
       for (auto it : input_nodes_) {
         auto data_node_ptr = data_entry_[EntryID(it, 0)];
@@ -270,15 +271,28 @@ class ILAFlexRuntime : public JSONRuntimeBase {
                 h2h_wgt_data_ptr);
       
       // lstm bias
-      auto eid_bias = EntryID(input_nodes_[4], 0);
-      auto& node_data_bias = data_entry_[eid_bias];
-      CHECK(node_data_bias->ndim == 1);
-      auto bias_data_size = GetDataSize(*node_data_bias)/sizeof(float);
+      
+      // bias_ih
+      auto eid_bias_ih = EntryID(input_nodes_[4], 0);
+      auto& node_data_bias_ih = data_entry_[eid_bias_ih];
+      CHECK(node_data_bias_ih->ndim == 1);
+      auto bias_data_size = GetDataSize(*node_data_bias_ih)/sizeof(float);
       CHECK(bias_data_size == 4 * 16*num_v_out);
-      float* bias_data_ptr = new float[bias_data_size];
-      std::copy(reinterpret_cast<float*>(node_data_bias->data),
-                reinterpret_cast<float*>(node_data_bias->data) + bias_data_size,
-                bias_data_ptr);
+      float* bias_data_ptr_ih = new float[bias_data_size];
+      std::copy(reinterpret_cast<float*>(node_data_bias_ih->data),
+                reinterpret_cast<float*>(node_data_bias_ih->data) + bias_data_size,
+                bias_data_ptr_ih);
+
+      // bias_hh
+      auto eid_bias_hh = EntryID(input_nodes_[5], 0);
+      auto& node_data_bias_hh = data_entry_[eid_bias_hh];
+      CHECK(node_data_bias_hh->ndim == 1);
+      float* bias_data_ptr_hh = new float[bias_data_size];
+      std::copy(reinterpret_cast<float*>(node_data_bias_hh->data),
+                reinterpret_cast<float*>(node_data_bias_hh->data) + bias_data_size,
+                bias_data_ptr_hh);   
+
+      
 
       // output
       // LSTM output is flatten?
@@ -305,7 +319,8 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       dump_data(inp_data_ptr, inp_data_size, "./data/lstm_inp.txt");
       dump_data(i2h_wgt_data_ptr, i2h_wgt_data_size, "./data/lstm_i2h_wgt.txt");
       dump_data(h2h_wgt_data_ptr, h2h_wgt_data_size, "./data/lstm_h2h_wgt.txt");
-      dump_data(bias_data_ptr, bias_data_size, "./data/lstm_bias.txt");
+      dump_data(bias_data_ptr_ih, bias_data_size, "./data/lstm_bias_ih.txt");
+      dump_data(bias_data_ptr_hh, bias_data_size, "./data/lstm_bias_hh.txt");
 
       // set flexnlp tensor assembly parameters;
       int is_bias = 1;
@@ -326,7 +341,7 @@ class ILAFlexRuntime : public JSONRuntimeBase {
       CHECK(res == 0) << "Error executing simulator " << call_cmd;
 
       // retrieve the results
-      retrieve_result(o_data_ptr, o_data_size, "./data/lstm_out.txt");
+      retrieve_result(o_data_ptr, o_data_size, "./data/lstm_hidden_state_out.txt");
       // copy the result and resume
       std::copy(o_data_ptr, o_data_ptr + o_data_size,
                 reinterpret_cast<float*>(node_data_o->data));
