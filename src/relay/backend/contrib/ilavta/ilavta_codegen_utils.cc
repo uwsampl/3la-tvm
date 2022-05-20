@@ -30,12 +30,12 @@ json byte_pairs_to_json(const addr_byte_pairs& byte_pairs) {
   return pair_list;
 }
 
-json getGEMMAsm(int uop_bgn, int uop_end) {
+json getGEMMAsm(int uop_offset, int batch, int in_feat, int out_feat) {
   return {
     {"name", "gemm"},
     {"reset_f", 0},
-    {"uop_bgn", uop_bgn},
-    {"uop_end", uop_end},
+    {"uop_bgn", uop_offset},
+    {"uop_end", uop_offset + batch * in_feat * out_feat},
     {"iter_o", 1},
     {"iter_i", 1},
     {"dst_fo", 0},
@@ -49,7 +49,7 @@ json getGEMMAsm(int uop_bgn, int uop_end) {
   };
 }
 
-json get2DLoadStoreAsm(int opcode, int mem_type, int sram_id, int dram_id, int y_size, int x_size) {
+std::string getMemOpInsnStr(int opcode, int mem_type) {
   std::string cmd_type;
   switch (opcode) {
     case VTA_OPCODE_LOAD:
@@ -79,6 +79,11 @@ json get2DLoadStoreAsm(int opcode, int mem_type, int sram_id, int dram_id, int y
       cmd_type += "acc";
       break;
   }
+  return cmd_type;
+}
+
+json get2DLoadStoreAsm(int opcode, int mem_type, int sram_id, int dram_id, int y_size, int x_size, int x_stride) {
+  std::string cmd_type = getMemOpInsnStr(opcode, mem_type);
   if (cmd_type == "load_uop") {
     return {
         {"name", cmd_type},
@@ -93,7 +98,7 @@ json get2DLoadStoreAsm(int opcode, int mem_type, int sram_id, int dram_id, int y
       {"dram_id", dram_id},
       {"y_size", y_size},
       {"x_size", x_size},
-      {"x_stride", 1}
+      {"x_stride", x_stride}
     };
   } else if (cmd_type == "load_inp") {
     return {
@@ -102,7 +107,7 @@ json get2DLoadStoreAsm(int opcode, int mem_type, int sram_id, int dram_id, int y
       {"dram_id", dram_id},
       {"y_size", y_size},
       {"x_size", x_size},
-      {"x_stride", 1},
+      {"x_stride", x_stride},
       {"y_pad0", 0},
       {"x_pad0", 0},
       {"y_pad1", 0},
@@ -114,6 +119,20 @@ json get2DLoadStoreAsm(int opcode, int mem_type, int sram_id, int dram_id, int y
   }
 }
 
+json get1DLoadStoreAsm(int opcode, int mem_type, int sram_id, int dram_id, int size) {
+  std::string cmd_type = getMemOpInsnStr(opcode, mem_type);
+  if (cmd_type == "load_uop") {
+    return {
+      {"name", cmd_type},
+      {"sram_id", sram_id},
+      {"dram_id", dram_id},
+      {"size", size},
+    };
+  } else {
+    return get2DLoadStoreAsm(opcode, mem_type, sram_id, dram_id, 1, size, size);
+  }
+}
+
 json getAluAsm(int alu_opcode, int uop_bgn, int uop_end, bool use_imm, uint16_t imm) {
   int asm_opcode = -1;
   std::string op_name = "";
@@ -122,7 +141,7 @@ json getAluAsm(int alu_opcode, int uop_bgn, int uop_end, bool use_imm, uint16_t 
     case VTA_ALU_OPCODE_MAX: asm_opcode = 1; op_name = "max"; break;
     case VTA_ALU_OPCODE_ADD: asm_opcode = 2; op_name = "add"; break;
     case VTA_ALU_OPCODE_SHR: asm_opcode = 3; op_name = "shr"; break;
-    case 4: asm_opcode = 4; op_name = "mul"; break;
+    case VTA_ALU_OPCODE_MUL: asm_opcode = 4; op_name = "mul"; break;
     default:
       fprintf(stderr, "ALU Opcode %d is not valid", alu_opcode);
       exit(-1);
@@ -150,27 +169,101 @@ std::string write_to_file(const std::string& filename, const json& data) {
   return filename + "_prog_frag.json";
 }
 
-std::string CompileGEMM(int batch, size_t n_inp_cols, size_t n_wgt_rows, int factor, int nbits, std::string filename) {
-    int batch_size = batch;
-    batch = VTA_BLOCK_IN;
-    int in_dim = 1;
-    int out_dim = 1;
-    int in_channels = in_dim * VTA_BLOCK_IN;
-    int out_channels = out_dim * VTA_BLOCK_OUT;
-    size_t uop_size = batch / VTA_BATCH * in_channels / VTA_BLOCK_IN * out_channels / VTA_BLOCK_OUT;
-    json prog_frag = {};
-    prog_frag["asm"] = json::array({});
-    auto& prog = prog_frag["asm"];
-    prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_UOP, 0, 0, 1, uop_size));
-    prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_WGT, 0, 0, 1, 1));
-    prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_INP, 0, 0, VTA_BLOCK_IN, 1));
-    prog.push_back(getGEMMAsm(0, uop_size));
-    prog.push_back(getAluAsm(4 /* VTA_ALU_OPCODE_MUL */, 0, uop_size, 1, factor));
-    prog.push_back(getAluAsm(VTA_ALU_OPCODE_SHR, 0, uop_size, 1, nbits));
-    prog.push_back(getAluAsm(VTA_ALU_OPCODE_MAX, 0, uop_size, 1, -127));
-    prog.push_back(getAluAsm(VTA_ALU_OPCODE_MIN, 0, uop_size, 1, 127));
-    prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_STORE, VTA_MEM_ID_OUT, 0, 0, batch * out_dim, 1));
-    return write_to_file(filename, prog_frag);
+std::string CompileGEMM(int batch, size_t in_channels, size_t out_channels, int factor, int nbits, std::string filename) {
+  // Input/output channels
+  const int block = VTA_BLOCK_OUT; // should be 16 by default
+  assert(block == 16);
+  int in_feat = in_channels;
+  int out_feat = out_channels;
+  const int virtual_threads = 1;
+  // Derive number of elements that need to be loaded/stored
+  int ins_size = batch / block * out_feat / block * (2 + in_feat / block * 3) + 2;
+  int uop_size = block / VTA_BATCH * block / VTA_BLOCK_IN * block / VTA_BLOCK_OUT * virtual_threads;
+  uop_size += batch;
+  int inp_size = batch / VTA_BATCH * in_feat / VTA_BLOCK_IN;
+  int wgt_size = in_feat / VTA_BLOCK_IN * out_feat / VTA_BLOCK_OUT;
+  int out_size = batch / VTA_BATCH * out_feat / VTA_BLOCK_OUT;
+  // Blocked buffer sizes (in terms of elements)
+  int inp_block_size = block / VTA_BATCH * block / VTA_BLOCK_IN;
+  int wgt_block_size = block / VTA_BLOCK_IN * block / VTA_BLOCK_OUT;
+  int out_block_size = block / VTA_BATCH * block / VTA_BLOCK_OUT;
+  json prog_frag = {};
+  prog_frag["asm"] = json::array({});
+  auto& prog = prog_frag["asm"];
+  // load uop
+  prog.push_back(get1DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_UOP, 0, 0, uop_size));
+  // Iterate over batch blocks
+  for (int i = 0; i < batch; i += block) {
+    // Iterate over output channel blocks
+    for (int j = 0; j < out_feat; j += block) {
+      // std::cerr << "i (batch): " << i  << "\tj (out_feat): " << j << std::endl;
+      // Load bias block (pop next if not first, push prev)
+      prog.push_back(get2DLoadStoreAsm(
+          VTA_OPCODE_LOAD,                                    // opcode
+          VTA_MEM_ID_ACC,                                     // type
+          0,                                                  // sram offset
+          i / VTA_BATCH * out_feat + j,                       // dram offset
+          block / VTA_BATCH,                                  // y size
+          block / VTA_BLOCK_OUT,                              // x size
+          out_feat / VTA_BLOCK_OUT                            // x stride
+        ));
+      // Iterate over input channel blocks
+      for (int k = 0; k < in_feat; k += block * virtual_threads) {
+        for (int l = 0; l < block * virtual_threads; l += block) {
+          prog.push_back(get2DLoadStoreAsm(
+              VTA_OPCODE_LOAD,                                // opcode
+              VTA_MEM_ID_WGT,                                 // type
+              l / VTA_BLOCK_IN * block,                       // sram offset
+              j / VTA_BLOCK_OUT * in_feat + k + l,            // dram offset
+              block / VTA_BLOCK_OUT,                          // y size
+              block / VTA_BLOCK_IN,                           // x size
+              in_feat / VTA_BLOCK_IN                          // x stride
+          ));
+          // Load input block (push next)
+          prog.push_back(get2DLoadStoreAsm(
+              VTA_OPCODE_LOAD,                                // opcode
+              VTA_MEM_ID_INP,                                 // type
+              l / VTA_BLOCK_IN * block,                       // sram offset
+              (i / VTA_BATCH * in_feat + k + l),              // dram offset
+              block / VTA_BATCH,                              // y size
+              block / VTA_BLOCK_IN,                           // x size
+              in_feat / VTA_BLOCK_IN                          // x stride
+          ));
+          // Perform GEMM (pop prev, push prev if not last, push next if last)
+          prog.push_back(getGEMMAsm(
+              l / block * uop_size / virtual_threads,         // uop offset
+              block / VTA_BATCH,                              // batch
+              block / VTA_BLOCK_IN,                           // in_feat
+              block / VTA_BLOCK_OUT                           // out_feat
+          ));
+        }
+      }
+      prog.push_back(getAluAsm(
+        VTA_ALU_OPCODE_MUL,
+        block / VTA_BATCH * block / VTA_BLOCK_IN * block / VTA_BLOCK_OUT,
+        block / VTA_BATCH * block / VTA_BLOCK_IN * block / VTA_BLOCK_OUT + block,
+        true,
+        factor
+      ));
+      prog.push_back(getAluAsm(
+        VTA_ALU_OPCODE_SHR,
+        block / VTA_BATCH * block / VTA_BLOCK_IN * block / VTA_BLOCK_OUT,
+        block / VTA_BATCH * block / VTA_BLOCK_IN * block / VTA_BLOCK_OUT + block,
+        true,
+        nbits
+      ));
+      prog.push_back(get2DLoadStoreAsm(
+          VTA_OPCODE_STORE,                                         // opcode
+          VTA_MEM_ID_OUT,                                           // type
+          0,                                                        // sram offset
+          i / VTA_BATCH * out_feat + j,                             // dram offset
+          block / VTA_BATCH,                                        // y size
+          block / VTA_BLOCK_OUT,                                    // x size
+          out_feat / VTA_BLOCK_OUT                                  // x stride
+      ));
+    }
+  }
+  return write_to_file(filename, prog_frag);
 }
 
 std::string CompilBiasAdd(int batch, size_t n_feat, std::string filename) {
