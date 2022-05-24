@@ -158,7 +158,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
       LOG(INFO) << "Size " << GetDataSize(*output_data) << " " << batch * n_wgt_rows;
       sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file,
                   batch * out_feat, batch, out_feat, acc_buf, "int8_t");
-      int ptr = 0;
+      ptr = 0;
       for (int i = 0; i < batch; ++i) {
         for (int j = 0; j < out_feat; ++j) {
           out_buf[i * n_wgt_rows + j] = (acc_buf[i * n_wgt_cols + j] * factor) >> nbits;
