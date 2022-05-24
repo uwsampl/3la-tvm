@@ -273,11 +273,11 @@ std::string CompilBiasAdd(int batch, size_t n_feat, std::string filename) {
     {"asm", json::array({})}
   };
   auto& prog = prog_frag["asm"];
-  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_UOP, 0, 0, 1, uop_size));
-  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_ACC, 0, 0, batch * in_dim, 1));
-  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_ACC, batch * in_dim, batch * in_dim, in_dim, 1));
+  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_UOP, 0, 0, 1, uop_size, uop_size));
+  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_ACC, 0, 0, batch * in_dim, 1, 1));
+  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_ACC, batch * in_dim, batch * in_dim, in_dim, 1, 1));
   prog.push_back(getAluAsm(VTA_ALU_OPCODE_ADD, 0, uop_size, 0, 0));
-  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_STORE, VTA_MEM_ID_OUT, 0, 0, batch * in_dim, 1));
+  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_STORE, VTA_MEM_ID_OUT, 0, 0, batch * in_dim, 1, 1));
   return write_to_file(filename, prog_frag);
 }
 
@@ -288,10 +288,10 @@ std::string CompileRelu(int batch, size_t n_feat, std::string filename) {
     {"asm", json::array({})}
   };
   auto& prog = prog_frag["asm"];
-  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_UOP, 0, 0, 1, uop_size));
-  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_ACC, 0, 0, batch * in_dim, 1));
+  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_UOP, 0, 0, 1, uop_size, uop_size));
+  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_LOAD, VTA_MEM_ID_ACC, 0, 0, batch * in_dim, 1, 1));
   prog.push_back(getAluAsm(VTA_ALU_OPCODE_MAX, 0, uop_size, 1, 0));
-  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_STORE, VTA_MEM_ID_OUT, 0, 0, batch * in_dim, 1));
+  prog.push_back(get2DLoadStoreAsm(VTA_OPCODE_STORE, VTA_MEM_ID_OUT, 0, 0, batch * in_dim, 1, 1));
   return write_to_file(filename, prog_frag);
 }
 
