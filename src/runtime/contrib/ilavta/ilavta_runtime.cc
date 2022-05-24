@@ -112,7 +112,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
           for (int block_in = 0; block_in < block; ++block_in) {
             // int row = init_row + block_in;
             for (int block_out = 0; block_out < block; ++block_out) {
-              t_weight[ptr++] = weight[i * block + block_in][j * block + block_out];
+              t_weight[ptr++] = weight[(i * block + block_in) * in_feat + (j * block + block_out)];
             }
           }
         }
