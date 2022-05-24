@@ -179,7 +179,7 @@ std::string CompileGEMM(int batch, size_t in_channels, size_t out_channels, int 
   // Derive number of elements that need to be loaded/stored
   int ins_size = batch / block * out_feat / block * (2 + in_feat / block * 3) + 2;
   int uop_size = block / VTA_BATCH * block / VTA_BLOCK_IN * block / VTA_BLOCK_OUT * virtual_threads;
-  uop_size += batch;
+  uop_size += VTA_BLOCK_OUT;
   int inp_size = batch / VTA_BATCH * in_feat / VTA_BLOCK_IN;
   int wgt_size = in_feat / VTA_BLOCK_IN * out_feat / VTA_BLOCK_OUT;
   int out_size = batch / VTA_BATCH * out_feat / VTA_BLOCK_OUT;

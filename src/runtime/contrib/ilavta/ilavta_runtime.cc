@@ -48,12 +48,12 @@ class ILAVTARuntime : public JSONRuntimeBase {
     auto op_name = call_node.GetOpName();
     int64_t sim_time = -1;
     if (op_name != "ilavta.dense" && op_name != "ilavta.bias_add"
-     && op_name != "ilavta.relu" && op_name != "ilavta.conv1d") {
+     && op_name != "ilavta.relu" && op_name != "ilavta.conv1d" && op_name != "ilavta.linear") {
       LOG(FATAL) << "Unknown pattern " << symbol_name_ << " " << op_name;
     }
 
-    if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.dense") {
-      LOG(INFO) << "[Runtime] off-loading ilavta.dense";
+    if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.linear") {
+      LOG(INFO) << "[Runtime] off-loading ilavta.linear";
       // assume there're only two inputs for now
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto& input_node_data = data_entry_[input_eid];
@@ -61,12 +61,16 @@ class ILAVTARuntime : public JSONRuntimeBase {
       auto wgt_eid = EntryID(input_nodes_[1], 0);
       auto& wgt_node_data = data_entry_[wgt_eid];
 
-      auto s_data_eid = EntryID(input_nodes_[2], 0);
+      auto bias_eid = EntryID(input_nodes_[2], 0);
+      auto& bias_node_data = data_entry_[bias_eid];
+
+      auto s_data_eid = EntryID(input_nodes_[3], 0);
       auto& s_data = data_entry_[s_data_eid];
-      auto s_w_eid = EntryID(input_nodes_[3], 0);
+      auto s_w_eid = EntryID(input_nodes_[4], 0);
       auto s_w = data_entry_[s_w_eid];
-      auto s_act_eid = EntryID(input_nodes_[4], 0);
+      auto s_act_eid = EntryID(input_nodes_[5], 0);
       auto s_act = data_entry_[s_act_eid];
+      auto block = VTA_BLOCK_OUT;
 
 # if 0
       for (int i = 0; i < input_nodes_.size(); ++i) {
@@ -83,15 +87,47 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
       int batch_size = n_inp_rows;
       int batch = batch_size * VTA_BATCH;
-      int in_dim = n_inp_cols % VTA_BLOCK_IN != 0 ? n_inp_cols / VTA_BLOCK_IN + 1 : n_inp_cols / VTA_BLOCK_IN;
-      int out_dim = n_wgt_rows % VTA_BLOCK_OUT != 0 ? n_wgt_rows / VTA_BLOCK_OUT + 1 : n_wgt_rows / VTA_BLOCK_OUT;
-      int in_channels = in_dim * VTA_BLOCK_IN;
-      int out_channels = out_dim * VTA_BLOCK_OUT;
+      int in_feat = n_inp_cols;
+      int out_feat = n_wgt_rows;
+
+      int bias_dim = bias_node_data->ndim;
+      assert(bias_dim == 1);
+      int bias_size = bias_node_data->shape[0];
+
 
       int uop_size = VTA_BLOCK_OUT;
 
       int8_t* input = reinterpret_cast<int8_t*>(input_node_data->data);
       int8_t* weight = reinterpret_cast<int8_t*>(wgt_node_data->data);
+      int32_t* bias = reinterpret_cast<int32_t*>(bias_node_data->data);
+      int32_t* bias_buf = new int32_t[out_feat * in_feat];
+      int8_t* t_weight = new int8_t[out_feat * in_feat];
+
+      // Process weights layout
+      int ptr = 0;
+      for (int i = 0; i < out_feat / block; ++i) {
+        // int init_row = i * block;
+        for (int j = 0; j < in_feat / block; ++j) {
+          // int init_col = j * block;
+          for (int block_in = 0; block_in < block; ++block_in) {
+            // int row = init_row + block_in;
+            for (int block_out = 0; block_out < block; ++block_out) {
+              t_weight[ptr++] = weight[i * block + block_in][j * block + block_out];
+            }
+          }
+        }
+      }
+
+      // Process bias layout (pad 0)
+      for (int i = 0; i < out_feat; ++i) {
+        for (int j = 0; j < in_feat; ++j) {
+          if (i * in_feat + j < bias_size) {
+            bias_buf[i * in_feat + j] = bias[i * in_feat + j];
+          } else {
+            bias_buf[i * in_feat + j] = 0;
+          }
+        }
+      }
       auto output_data = data_entry_[outputs_[0].id_];
       auto output_node = nodes_[outputs_[0].id_];
       int8_t* out_buf = reinterpret_cast<int8_t*>(output_data->data);
@@ -108,23 +144,23 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int32_t* acc_buf = new int32_t[batch * n_wgt_rows];
       memset(acc_buf, 0, sizeof(int) * batch * n_wgt_rows);
 
-      VTAUop* uop_buf   = getGEMMUops(block_batch / VTA_BATCH, block_in_channels / VTA_BLOCK_IN, block_out_channels / VTA_BLOCK_OUT);
-      std::string data_file = dump_datafile(block_inp_buf, block_batch * block_in_channels,
-                block_wgt_buf, block_out_channels * block_in_channels,
-                nullptr, 0,
+      VTAUop* uop_buf   = getGEMMUops(batch / VTA_BATCH, in_feat / VTA_BLOCK_IN, out_feat / VTA_BLOCK_OUT);
+      std::string data_file = dump_datafile(input, batch * in_feat,
+                t_weight, out_feat * in_feat,
+                bias_buf, out_feat * in_feat,
                 uop_buf, uop_size,
                 "ilavta_dense");
       std::string ila_asm = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
-      nlohmann::json asm_data = get_gemm(inp_rows, inp_cols, wgt_rows, factor, nbits);
-      std::ofstream fout(ila_asm);
-      fout << asm_data;
-      fout.close();
+      // nlohmann::json asm_data = get_gemm(batch, in_feat, out_feat, factor, nbits);
+      // std::ofstream fout(ila_asm);
+      // fout << asm_data;
+      // fout.close();
       LOG(INFO) << "Size " << GetDataSize(*output_data) << " " << batch * n_wgt_rows;
       sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file,
-                  inp_rows * wgt_rows, block_batch, wgt_rows, out_inter, "int8_t");
+                  batch * out_feat, batch, out_feat, acc_buf, "int8_t");
       int ptr = 0;
       for (int i = 0; i < batch; ++i) {
-        for (int j = 0; j < n_wgt_rows; ++j) {
+        for (int j = 0; j < out_feat; ++j) {
           out_buf[i * n_wgt_rows + j] = (acc_buf[i * n_wgt_cols + j] * factor) >> nbits;
         }
       }

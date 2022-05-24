@@ -17,9 +17,9 @@ const std::string OUTPUT_DUMP = "vta_output_dump.json";
 /*
  * Code adopted from https://github.com/apache/tvm-vta/blob/main/tests/hardware/common/test_lib.cc
  * */
-VTAUop* getGEMMUops(int batch, int in_feat, int out_feat) {
+VTAUop* getGEMMUops(int batch, int in_feat, int out_feat, int block_size) {
   // Derive the total uop size
-  int uop_size = batch * in_feat * out_feat;
+  int uop_size = batch * in_feat * out_feat + block_size;
 
   // Allocate buffer
   VTAUop* uop_buf = static_cast<VTAUop*>(VTAMemAlloc(sizeof(VTAUop) * uop_size, 0));
@@ -34,6 +34,9 @@ VTAUop* getGEMMUops(int batch, int in_feat, int out_feat) {
         uop_idx++;
       }
     }
+  }
+  for (int  i = 0; i < block_size; ++i) {
+    uop_buf[uop_idx++].dst_idx = i;
   }
   return uop_buf;
 }
@@ -399,31 +402,20 @@ std::string dump_datafile(int8_t* input_buf, size_t input_size, int8_t* weight_b
                           size_t weight_size, int32_t* acc_buf, size_t acc_size, VTAUop* uop_buf,
                           size_t uop_size, std::string filename) {
   json data_file;
-
-  json raw_dump;
-  addr_byte_pairs insn_vec;
-  addr_byte_pairs acc_vec;
-  addr_byte_pairs uop_vec;
-  addr_byte_pairs wgt_vec;
-  addr_byte_pairs inp_vec;
-  addr_byte_pairs out_vec;
-  std::map<std::string, addr_byte_pairs*> byte_pairs = {{"INSN", &insn_vec}, {"ACC", &acc_vec},
-                                                        {"UOP", &uop_vec},   {"WGT", &wgt_vec},
-                                                        {"INP", &inp_vec},   {"OUT", &out_vec}};
   std::string out_filename = filename + "_data.json";
   std::ofstream out_file(out_filename);
   data_file["data_dump"] = json::array({});
   auto& data = data_file["data_dump"];
   for (int i = 0; i < input_size; ++i) {
     data.push_back(
-        {{"idx", i}, {"name", "input_buffer"}, {"value", to_hex<uint8_t>(input_buf[i])}});
+        {{"idx", i}, {"name", "input_buffer"}, {"value", to_hex<int8_t>(input_buf[i])}});
   }
   for (int i = 0; i < weight_size; ++i) {
     data.push_back(
-        {{"idx", i}, {"name", "weight_buffer"}, {"value", to_hex<uint8_t>(weight_buf[i])}});
+        {{"idx", i}, {"name", "weight_buffer"}, {"value", to_hex<int8_t>(weight_buf[i])}});
   }
   for (int i = 0; i < acc_size; ++i) {
-    data.push_back({{"idx", i}, {"name", "bias_buffer"}, {"value", to_hex<uint32_t>(acc_buf[i])}});
+    data.push_back({{"idx", i}, {"name", "bias_buffer"}, {"value", to_hex<int32_t>(acc_buf[i])}});
   }
   for (int i = 0; i < uop_size; ++i) {
     data.push_back({{"idx", i},
