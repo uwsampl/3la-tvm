@@ -116,6 +116,8 @@ std::string dump_datafile(int8_t* input_buf, size_t input_size,
 
 std::vector<int> approximate_scale(double x);
 
+std::string CompileGEMM(int batch, size_t in_channels, size_t out_channels, int factor, int nbits, std::string filename);
+
 }
 }
 }

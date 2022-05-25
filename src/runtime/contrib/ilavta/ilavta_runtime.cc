@@ -52,8 +52,8 @@ class ILAVTARuntime : public JSONRuntimeBase {
       LOG(FATAL) << "Unknown pattern " << symbol_name_ << " " << op_name;
     }
 
-    if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.linear") {
-      LOG(INFO) << "[Runtime] off-loading ilavta.linear";
+    if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.dense") {
+      LOG(INFO) << "[Runtime] off-loading ilavta.dense";
       // assume there're only two inputs for now
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto& input_node_data = data_entry_[input_eid];
@@ -150,7 +150,8 @@ class ILAVTARuntime : public JSONRuntimeBase {
                 nullptr, 0,
                 uop_buf, uop_size,
                 "ilavta_dense");
-      std::string ila_asm = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
+      std::string filename = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
+      std::string ila_asm = CompileGEMM(batch, in_feat, out_feat, factor, nbits, filename);
       // nlohmann::json asm_data = get_gemm(batch, in_feat, out_feat, factor, nbits);
       // std::ofstream fout(ila_asm);
       // fout << asm_data;

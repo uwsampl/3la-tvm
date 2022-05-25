@@ -48,7 +48,7 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
             || name == "ilavta.dense" || name == "ilavta.relu" || name == "ilavta.conv1d" || name == "ilavta.linear")) {
         LOG(FATAL) << "Unrecognized pattern: " << name;
       }
-      if (name == "ilavta.linear") {
+      if (name == "ilavta.dense") {
         // Linear layer pattern of VTA
         // required arguments:
         //  - inputs
