@@ -65,13 +65,21 @@ def make_pattern_conv1d():
     weight = wildcard()
     return is_op('nn.conv1d')(data, weight)
 
+# def make_pattern_linear_layer():
+#     data = wildcard()
+#     weights = wildcard()
+#     bias = wildcard()
+#     act = is_op('nn.dense')(data, weights)
+#     act = is_op('nn.add')(act, bias)
+#     casting = 
+
 @register_pattern_table("ilavta")
 def pattern_table():
     # conv2d_pat = ("ilavta.conv2d", make_pattern_conv2d())
-    matmul_pat = ("ilavta.batch_matmul", make_pattern_batch_matmul())
-    dense_pat  = ("ilavta.dense", make_pattern_dense())  
-    bias_add_pat = ("ilavta.bias_add", make_pattern_bias_add())
-    relu_pat = ("ilavta.relu", make_pattern_relu())
-    conv1d_pat = ("ilavta.conv1d", make_pattern_conv1d())
-    ilavta_patterns = [relu_pat, conv1d_pat, dense_pat, bias_add_pat]
-    return ilavta_patterns
+    # matmul_pat = ("ilavta.batch_matmul", make_pattern_batch_matmul())
+    # dense_pat  = ("ilavta.dense", make_pattern_dense())  
+    # bias_add_pat = ("ilavta.bias_add", make_pattern_bias_add())
+    # relu_pat = ("ilavta.relu", make_pattern_relu())
+    # conv1d_pat = ("ilavta.conv1d", make_pattern_conv1d())
+    # ilavta_patterns = [relu_pat, conv1d_pat, dense_pat, bias_add_pat]
+    return []

@@ -197,16 +197,16 @@ std::string CompileGEMM(int batch, size_t in_channels, size_t out_channels, int 
     // Iterate over output channel blocks
     for (int j = 0; j < out_feat; j += block) {
       // std::cerr << "i (batch): " << i  << "\tj (out_feat): " << j << std::endl;
-      // Load bias block (pop next if not first, push prev)
-      prog.push_back(get2DLoadStoreAsm(
-          VTA_OPCODE_LOAD,                                    // opcode
-          VTA_MEM_ID_ACC,                                     // type
-          0,                                                  // sram offset
-          i / VTA_BATCH * out_feat + j,                       // dram offset
-          block / VTA_BATCH,                                  // y size
-          block / VTA_BLOCK_OUT,                              // x size
-          out_feat / VTA_BLOCK_OUT                            // x stride
-        ));
+      // Load bias block
+      // prog.push_back(get2DLoadStoreAsm(
+      //     VTA_OPCODE_LOAD,                                    // opcode
+      //     VTA_MEM_ID_ACC,                                     // type
+      //     0,                                                  // sram offset
+      //     i / VTA_BATCH * out_feat + j,                       // dram offset
+      //     block / VTA_BATCH,                                  // y size
+      //     block / VTA_BLOCK_OUT,                              // x size
+      //     out_feat / VTA_BLOCK_OUT                            // x stride
+      //   ));
       // Iterate over input channel blocks
       for (int k = 0; k < in_feat; k += block * virtual_threads) {
         for (int l = 0; l < block * virtual_threads; l += block) {

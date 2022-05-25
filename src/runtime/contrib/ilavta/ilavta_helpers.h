@@ -28,7 +28,7 @@ using namespace nlohmann;
 * and `out_feat` (number of `in_feat`s), return UOps that perform a dense operator over
 * INPUT buffer and ACC buffer
 * */
-VTAUop * getGEMMUops(int batch, int in_feat, int out_feat); 
+VTAUop * getGEMMUops(int batch, int in_feat, int out_feat, int block_size); 
 
 /*
  * Given `batch` and `in_feat`, return UOps that perform ADD operator

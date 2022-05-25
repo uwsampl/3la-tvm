@@ -61,14 +61,14 @@ class ILAVTARuntime : public JSONRuntimeBase {
       auto wgt_eid = EntryID(input_nodes_[1], 0);
       auto& wgt_node_data = data_entry_[wgt_eid];
 
-      auto bias_eid = EntryID(input_nodes_[2], 0);
-      auto& bias_node_data = data_entry_[bias_eid];
+      // auto bias_eid = EntryID(input_nodes_[2], 0);
+      // auto& bias_node_data = data_entry_[bias_eid];
 
-      auto s_data_eid = EntryID(input_nodes_[3], 0);
+      auto s_data_eid = EntryID(input_nodes_[2], 0);
       auto& s_data = data_entry_[s_data_eid];
-      auto s_w_eid = EntryID(input_nodes_[4], 0);
+      auto s_w_eid = EntryID(input_nodes_[3], 0);
       auto s_w = data_entry_[s_w_eid];
-      auto s_act_eid = EntryID(input_nodes_[5], 0);
+      auto s_act_eid = EntryID(input_nodes_[4], 0);
       auto s_act = data_entry_[s_act_eid];
       auto block = VTA_BLOCK_OUT;
 
@@ -90,17 +90,17 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int in_feat = n_inp_cols;
       int out_feat = n_wgt_rows;
 
-      int bias_dim = bias_node_data->ndim;
-      assert(bias_dim == 1);
-      int bias_size = bias_node_data->shape[0];
+      // int bias_dim = bias_node_data->ndim;
+      // assert(bias_dim == 1);
+      // int bias_size = bias_node_data->shape[0];
 
 
       int uop_size = VTA_BLOCK_OUT;
 
       int8_t* input = reinterpret_cast<int8_t*>(input_node_data->data);
       int8_t* weight = reinterpret_cast<int8_t*>(wgt_node_data->data);
-      int32_t* bias = reinterpret_cast<int32_t*>(bias_node_data->data);
-      int32_t* bias_buf = new int32_t[out_feat * in_feat];
+      // int32_t* bias = reinterpret_cast<int32_t*>(bias_node_data->data);
+      // int32_t* bias_buf = new int32_t[out_feat * in_feat];
       int8_t* t_weight = new int8_t[out_feat * in_feat];
 
       // Process weights layout
@@ -119,15 +119,15 @@ class ILAVTARuntime : public JSONRuntimeBase {
       }
 
       // Process bias layout (pad 0)
-      for (int i = 0; i < out_feat; ++i) {
-        for (int j = 0; j < in_feat; ++j) {
-          if (i * in_feat + j < bias_size) {
-            bias_buf[i * in_feat + j] = bias[i * in_feat + j];
-          } else {
-            bias_buf[i * in_feat + j] = 0;
-          }
-        }
-      }
+      // for (int i = 0; i < out_feat; ++i) {
+      //   for (int j = 0; j < in_feat; ++j) {
+      //     if (i * in_feat + j < bias_size) {
+      //       bias_buf[i * in_feat + j] = bias[i * in_feat + j];
+      //     } else {
+      //       bias_buf[i * in_feat + j] = 0;
+      //     }
+      //   }
+      // }
       auto output_data = data_entry_[outputs_[0].id_];
       auto output_node = nodes_[outputs_[0].id_];
       int8_t* out_buf = reinterpret_cast<int8_t*>(output_data->data);
@@ -144,10 +144,10 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int32_t* acc_buf = new int32_t[batch * n_wgt_rows];
       memset(acc_buf, 0, sizeof(int) * batch * n_wgt_rows);
 
-      VTAUop* uop_buf   = getGEMMUops(batch / VTA_BATCH, in_feat / VTA_BLOCK_IN, out_feat / VTA_BLOCK_OUT);
+      VTAUop* uop_buf   = getGEMMUops(batch / VTA_BATCH, in_feat / VTA_BLOCK_IN, out_feat / VTA_BLOCK_OUT, block);
       std::string data_file = dump_datafile(input, batch * in_feat,
                 t_weight, out_feat * in_feat,
-                bias_buf, out_feat * in_feat,
+                nullptr, 0,
                 uop_buf, uop_size,
                 "ilavta_dense");
       std::string ila_asm = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
@@ -315,7 +315,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
           }
         }
       }
-      VTAUop* uop_buf   = getGEMMUops(vec_cnt / VTA_BATCH, vec_width / VTA_BLOCK_IN, O / VTA_BLOCK_OUT);
+      VTAUop* uop_buf   = getGEMMUops(vec_cnt / VTA_BATCH, vec_width / VTA_BLOCK_IN, O / VTA_BLOCK_OUT, VTA_BLOCK_OUT);
 
       std::string data_file = dump_datafile(data_col, N * I * wgtW * (W - wgtW + 1),
                                             wgt_data, O * vec_width,
