@@ -58,18 +58,18 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
         //  -- these two approximates the calibrated scaling factor of re-quantized (actual) activations 
         //     (i.e. using multiplication and right shifts to approximate a division)
         // NOTE: 
-        LOG(INFO) << "ilavta.linear pattern";
+        LOG(INFO) << "ilavta.dense pattern";
         auto input_shape = GetShape(cn->args[0]->checked_type());
         auto weight_shape = GetShape(cn->args[1]->checked_type());
         // these casts must success
-        auto factor = cn->args[2].as<IntImmNode>()->value;
-        auto nbits = cn->args[3].as<IntImmNode>()->value;
-        int info[] = {input_shape[0], input_shape[1], weight_shape[0], factor, nbits};
-        filename = GetCompiledFilename("linear", info, 5);
-        if (this->compiled_func.find(filename) == this->compiled_func.end()) {
-          this->compiled_func.insert(filename);
-          filename = CompileGEMM(input_shape[0], input_shape[1], weight_shape[0], factor, nbits, "./prog_frag/" + filename);
-        }
+        // auto factor = cn->args[2].as<IntImmNode>()->value;
+        // auto nbits = cn->args[3].as<IntImmNode>()->value;
+        int info[] = {input_shape[0], input_shape[1], weight_shape[0]};
+        filename = GetCompiledFilename("linear", info, 3);
+        // if (this->compiled_func.find(filename) == this->compiled_func.end()) {
+          // this->compiled_func.insert(filename);
+          // filename = CompileGEMM(input_shape[0], input_shape[1], weight_shape[0], factor, nbits, "./prog_frag/" + filename);
+        // }
       }else if (name == "ilavta.dense") {
         LOG(INFO) << "ilavta.dense pattern";
         auto input_shape = GetShape(cn->args[0]->checked_type());

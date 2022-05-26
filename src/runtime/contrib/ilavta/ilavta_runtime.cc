@@ -86,22 +86,28 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int n_wgt_rows = wgt_node_data->shape[0];
 
       int batch_size = n_inp_rows;
-      int batch = batch_size * VTA_BATCH;
+      int batch = batch_size;
       int in_feat = n_inp_cols;
       int out_feat = n_wgt_rows;
 
       // int bias_dim = bias_node_data->ndim;
       // assert(bias_dim == 1);
       // int bias_size = bias_node_data->shape[0];
-
-
-      int uop_size = VTA_BLOCK_OUT;
+      int uop_size = batch * in_feat * out_feat + block;
 
       int8_t* input = reinterpret_cast<int8_t*>(input_node_data->data);
       int8_t* weight = reinterpret_cast<int8_t*>(wgt_node_data->data);
       // int32_t* bias = reinterpret_cast<int32_t*>(bias_node_data->data);
       // int32_t* bias_buf = new int32_t[out_feat * in_feat];
       int8_t* t_weight = new int8_t[out_feat * in_feat];
+
+      LOG(INFO) << "Input buffer:";
+      for (int i = 0; i < batch; ++i) {
+        for (int j = 0; j < in_feat; ++j) {
+          std::cerr << std::hex << (int32_t)(input[i * in_feat + j]) << ' ';
+        }
+        std::cerr << "\n";
+      }
 
       // Process weights layout
       int ptr = 0;
@@ -117,6 +123,26 @@ class ILAVTARuntime : public JSONRuntimeBase {
           }
         }
       }
+
+      // LOG(INFO) << "weights:";
+      // for (int i = 0; i < out_feat; ++i) {
+      //   for (int j = 0; j < in_feat; ++j) {
+      //     std::cerr << (int32_t)weight[i * in_feat + j] << " ";
+      //     if (j % block == block - 1) std::cerr << "| ";
+      //   }
+      //   std::cerr << "\n";
+      //   if (i % block == block - 1) std::cerr << "\n";
+      // }
+
+      // LOG(INFO) << "Transformed weights:";
+      // for (int i = 0; i < out_feat; ++i) {
+      //   for (int j = 0; j < in_feat; ++j) {
+      //     std::cerr << (int32_t)t_weight[i * in_feat + j] << " ";
+      //     if (j % block == block - 1) std::cerr << "| ";
+      //   }
+      //   std::cerr << "\n";
+      //   if (i % block == block - 1) std::cerr << "\n";
+      // }
 
       // Process bias layout (pad 0)
       // for (int i = 0; i < out_feat; ++i) {
@@ -160,11 +186,12 @@ class ILAVTARuntime : public JSONRuntimeBase {
       sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file,
                   batch * out_feat, batch, out_feat, acc_buf, "int8_t");
       ptr = 0;
-      for (int i = 0; i < batch; ++i) {
-        for (int j = 0; j < out_feat; ++j) {
-          out_buf[i * n_wgt_rows + j] = (acc_buf[i * n_wgt_cols + j] * factor) >> nbits;
-        }
-      }
+      memcpy(out_buf, acc_buf, sizeof(int8_t) * GetDataSize(*output_data));
+      // for (int i = 0; i < batch; ++i) {
+      //   for (int j = 0; j < out_feat; ++j) {
+      //     out_buf[i * out_feat + j] = (acc_buf[i * out_feat + j]);
+      //   }
+      // }
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.bias_add") {
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto bias_eid = EntryID(input_nodes_[1], 0);
