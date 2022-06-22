@@ -93,21 +93,23 @@ class ILAVTARuntime : public JSONRuntimeBase {
       // int bias_dim = bias_node_data->ndim;
       // assert(bias_dim == 1);
       // int bias_size = bias_node_data->shape[0];
-      int uop_size = batch * in_feat * out_feat + block;
+      int uop_size = 16 * 16 * 16 + block;
 
       int8_t* input = reinterpret_cast<int8_t*>(input_node_data->data);
       int8_t* weight = reinterpret_cast<int8_t*>(wgt_node_data->data);
       // int32_t* bias = reinterpret_cast<int32_t*>(bias_node_data->data);
       // int32_t* bias_buf = new int32_t[out_feat * in_feat];
       int8_t* t_weight = new int8_t[out_feat * in_feat];
+      int32_t* bias_buf = new int32_t[batch * out_feat];
+      memset(bias_buf, 0, sizeof(int32_t) * batch * out_feat);
 
-      LOG(INFO) << "Input buffer:";
-      for (int i = 0; i < batch; ++i) {
-        for (int j = 0; j < in_feat; ++j) {
-          std::cerr << std::hex << (int32_t)(input[i * in_feat + j]) << ' ';
-        }
-        std::cerr << "\n";
-      }
+      // LOG(INFO) << "Input buffer:";
+      // for (int i = 0; i < batch; ++i) {
+      //   for (int j = 0; j < in_feat; ++j) {
+      //     std::cerr << std::hex << (int32_t)(input[i * in_feat + j]) << ' ';
+      //   }
+      //   std::cerr << "\n";
+      // }
 
       // Process weights layout
       int ptr = 0;
@@ -170,12 +172,12 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int32_t* acc_buf = new int32_t[batch * n_wgt_rows];
       memset(acc_buf, 0, sizeof(int) * batch * n_wgt_rows);
 
-      VTAUop* uop_buf   = getGEMMUops(batch / VTA_BATCH, in_feat / VTA_BLOCK_IN, out_feat / VTA_BLOCK_OUT, block);
+      VTAUop* uop_buf   = getGEMMUops(16 / VTA_BATCH, 1, 1, block);
       std::string data_file = dump_datafile(input, batch * in_feat,
                 t_weight, out_feat * in_feat,
-                nullptr, 0,
+                bias_buf, batch * out_feat,
                 uop_buf, uop_size,
-                "ilavta_dense");
+                "ilavta_dense_" + std::to_string(batch) + "x" + std::to_string(in_feat) + "_" + std::to_string(out_feat));
       std::string filename = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
       std::string ila_asm = CompileGEMM(batch, in_feat, out_feat, factor, nbits, filename);
       // nlohmann::json asm_data = get_gemm(batch, in_feat, out_feat, factor, nbits);
@@ -187,6 +189,9 @@ class ILAVTARuntime : public JSONRuntimeBase {
                   batch * out_feat, batch, out_feat, acc_buf, "int8_t");
       ptr = 0;
       memcpy(out_buf, acc_buf, sizeof(int8_t) * GetDataSize(*output_data));
+      delete[] acc_buf;
+      delete[] t_weight;
+      delete[] bias_buf;
       // for (int i = 0; i < batch; ++i) {
       //   for (int j = 0; j < out_feat; ++j) {
       //     out_buf[i * out_feat + j] = (acc_buf[i * out_feat + j]);
