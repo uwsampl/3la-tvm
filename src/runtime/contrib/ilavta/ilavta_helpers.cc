@@ -615,9 +615,12 @@ json get1DLoadStoreAsm(int opcode, int mem_type, int sram_id, int dram_id, int s
 }
 
 std::string CompileGEMM(int batch, size_t in_channels, size_t out_channels, int factor, int nbits, std::string filename) {
-  // Input/output channels
+  // Input/output channel
   const int block = VTA_BLOCK_OUT; // should be 16 by default
-  assert(block == 16);
+  ICHECK_EQ(block, 16);
+  ICHECK_EQ(batch % block, 0) << "Batch is not a multiple of 16";
+  ICHECK_EQ(in_channels % block, 0) << "input features channels is not a multiple of 16";
+  ICHECK_EQ(out_channels % block, 0) << "output features is not a multiple of 16";
   printf("=====================================================================================\n");
   printf("INFO - Blocked GEMM test: batch=%d, in_channels=%d, out_channels=%d, block=%d, uop_comp=%d, vt=%d\n",
          batch, in_channels, out_channels, block, false, 1);
