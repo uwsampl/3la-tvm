@@ -816,7 +816,7 @@ struct AdaptivePool1DAttrs : public tvm::AttrsNode<AdaptivePool1DAttrs> {
 /*! \brief Attributes for 2d adaptive pool operator */
 struct AdaptivePool2DAttrs : public tvm::AttrsNode<AdaptivePool2DAttrs> {
   Array<IndexExpr> output_size;
-  std::string layout;
+  tvm::String layout;
   tvm::String out_layout;
 
   TVM_DECLARE_ATTRS(AdaptivePool2DAttrs, "relay.attrs.AdaptivePool2DAttrs") {
