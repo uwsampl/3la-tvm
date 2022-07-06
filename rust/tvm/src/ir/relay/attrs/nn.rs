@@ -28,6 +28,17 @@ type IndexExpr = PrimExpr;
 
 #[repr(C)]
 #[derive(Object, Debug)]
+#[ref_name = "AdaptivePool2DAttrs"]
+#[type_key = "relay.attrs.AdaptivePool2DAttrs"]
+pub struct AdaptivePool2DAttrsNode {
+    pub base: BaseAttrsNode,
+    pub output_size: Array<IndexExpr>,
+    pub layout: String,
+    pub out_layout: TString,
+}
+
+#[repr(C)]
+#[derive(Object, Debug)]
 #[ref_name = "PadAttrs"]
 #[type_key = "relay.attrs.PadAttrs"]
 pub struct PadAttrsNode {
