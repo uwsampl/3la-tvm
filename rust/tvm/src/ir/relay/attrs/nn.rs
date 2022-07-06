@@ -33,7 +33,7 @@ type IndexExpr = PrimExpr;
 pub struct AdaptivePool2DAttrsNode {
     pub base: BaseAttrsNode,
     pub output_size: Array<IndexExpr>,
-    pub layout: String,
+    pub layout: TString,
     pub out_layout: TString,
 }
 
