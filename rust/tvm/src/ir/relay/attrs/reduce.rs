@@ -24,6 +24,19 @@ use tvm_macros::Object;
 
 type IndexExpr = PrimExpr;
 
+
+#[repr(C)]
+#[derive(Object, Debug)]
+#[ref_name = "ArgReduceAttrs"]
+#[type_key = "relay.attrs.ArgReduceAttrs"]
+pub struct ArgReduceAttrsNode {
+    pub base: BaseAttrsNode,
+    pub axis: Array<IndexExpr>,
+    pub keepdims: bool,
+    pub select_last_index: bool,
+    pub exclude: bool,
+}
+
 #[repr(C)]
 #[derive(Object, Debug)]
 #[ref_name = "ReduceAttrs"]
