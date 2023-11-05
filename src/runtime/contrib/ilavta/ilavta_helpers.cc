@@ -418,7 +418,8 @@ std::string dump_datafile(int8_t* input_buf, size_t input_size, int8_t* weight_b
                     {"value", to_hex<uint64_t>(*(reinterpret_cast<uint64_t*>(&uop_buf[i])))}});
   }
   out_file << std::setw(4) << data_file << "\n";
-  return out_filename;
+  std::system(("mv " + out_filename + " ./data").c_str());
+  return "./data/" + out_filename;
 }
 
 // Calculates GCD (greatest common divisor) of `x` and `y`
@@ -435,7 +436,7 @@ std::vector<int> approximate_scale(double x) {
   int d = 1;
   double eps = 1e-7;
   double fract_value = (double)n / (double)d;
-  while (fabs(fract_value - x) > eps) {
+  while (fabs(fract_value - x) > eps && (d < (1 << 16))) {
     if (fract_value < x) {
       n += 1;
     } else {
@@ -534,10 +535,8 @@ size_t loadILAOutput(const ila_output_data& out_values, int8_t* buffer, size_t o
       std::stringstream addr_ss;
       addr_ss << std::hex << addr;
       addr_ss >> addr_temp;
-      // std::cerr << i * out_w + j << "\n";
       buffer[addr_temp] = static_cast<int8_t>(temp);
       buf_cur += 1;
-      // std::cerr << "finished" << '\n';
     }
   }
   LOG(INFO) << "buf cur == " << buf_cur;
@@ -700,6 +699,20 @@ std::string CompileGEMM(int batch, size_t in_channels, size_t out_channels, int 
         block / VTA_BATCH * block / VTA_BLOCK_IN * block / VTA_BLOCK_OUT + block,
         true,
         nbits, 0
+      ));
+      prog.push_back(getAluAsm(
+        VTA_ALU_OPCODE_MAX,
+        block / VTA_BATCH * block / VTA_BLOCK_IN * block / VTA_BLOCK_OUT,
+        block / VTA_BATCH * block / VTA_BLOCK_IN * block / VTA_BLOCK_OUT + block,
+        true,
+        -127, 0
+      ));
+      prog.push_back(getAluAsm(
+        VTA_ALU_OPCODE_MIN,
+        block / VTA_BATCH * block / VTA_BLOCK_IN * block / VTA_BLOCK_OUT,
+        block / VTA_BATCH * block / VTA_BLOCK_IN * block / VTA_BLOCK_OUT + block,
+        true,
+        127, 0
       ));
       prog.push_back(get2DLoadStoreAsm(
           VTA_OPCODE_STORE,                                         // opcode

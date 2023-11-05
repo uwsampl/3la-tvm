@@ -65,26 +65,8 @@ class ILAVTAJSONSerializer : public backend::contrib::JSONSerializer {
         // auto factor = cn->args[2].as<IntImmNode>()->value;
         // auto nbits = cn->args[3].as<IntImmNode>()->value;
         int info[] = {input_shape[0], input_shape[1], weight_shape[0]};
-        filename = GetCompiledFilename("linear", info, 3);
-        // if (this->compiled_func.find(filename) == this->compiled_func.end()) {
-          // this->compiled_func.insert(filename);
-          // filename = CompileGEMM(input_shape[0], input_shape[1], weight_shape[0], factor, nbits, "./prog_frag/" + filename);
-        // }
-      }else if (name == "ilavta.dense") {
-        LOG(INFO) << "ilavta.dense pattern";
-        auto input_shape = GetShape(cn->args[0]->checked_type());
-        auto weight_shape = GetShape(cn->args[1]->checked_type());
-        int batch = input_shape[0];
-        int n_inp_cols = input_shape[1];
-        int n_wgt_rows = weight_shape[0];
-        int info[] = {batch, n_inp_cols, n_wgt_rows};
-        filename = GetCompiledFilename("dense", info, 3);
-        if (this->compiled_func.find(filename) == this->compiled_func.end()) {
-          this->compiled_func.insert(filename);
-          // `factor` and `nbits` are placeholders for "partial evaluation"
-          filename = CompileGEMM(batch, n_inp_cols, n_wgt_rows, 1, 0, "./prog_frag/" + filename);
-        }
-      }  else if (name == "ilavta.bias_add") {
+        filename = "";
+      } else if (name == "ilavta.bias_add") {
         LOG(INFO) << "ilavta.bias_add pattern";
         auto input_shape = GetShape(cn->args[0]->checked_type());
         int batch = input_shape[0];

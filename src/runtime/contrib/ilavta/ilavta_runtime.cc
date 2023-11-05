@@ -31,16 +31,6 @@ class ILAVTARuntime : public JSONRuntimeBase {
     CHECK(symbol_name_.substr(0, 6) == "ilavta");
     LOG(INFO) << "[Runtime] enter " << symbol_name_ << " runtime";
 
-    // auto dump_toggle_fn = runtime::Registry::Get("vta.simulator.profiler_dump_mode");
-    // CHECK(dump_toggle_fn != nullptr) << "Cannot get profiler_dump_mode toggle";
-    // std::vector<TVMValue> values(10);
-    // std::vector<int> codes(10);
-    // runtime::TVMArgsSetter setter(values.data(), codes.data());
-    // setter(0, 1L);
-    // TVMRetValue rv;
-    // TVMArgs arg(values.data(), codes.data(), 5);
-    // dump_toggle_fn->CallPacked(arg, &rv);
-
     const std::string wall_clock_file = "ilavta_wallclock.json";
     std::string driver_dir = getenv("PY_3LA_DRIVER");
     driver_dir += "/vta";
@@ -72,14 +62,6 @@ class ILAVTARuntime : public JSONRuntimeBase {
       auto s_act = data_entry_[s_act_eid];
       auto block = VTA_BLOCK_OUT;
 
-# if 0
-      for (int i = 0; i < input_nodes_.size(); ++i) {
-        auto eid = EntryID(input_nodes_[0], 0);
-        for (int dim = 0; dim < data_entry_[eid]->ndim; ++dim) {
-          LOG(INFO) << "Idx: " << i << " shape: " << data_entry_[eid]->shape[dim];
-        }
-      }
-#endif
       int n_inp_rows = input_node_data->shape[0];
       int n_inp_cols = input_node_data->shape[1];
       int n_wgt_cols = n_inp_cols;
@@ -103,14 +85,6 @@ class ILAVTARuntime : public JSONRuntimeBase {
       int32_t* bias_buf = new int32_t[batch * out_feat];
       memset(bias_buf, 0, sizeof(int32_t) * batch * out_feat);
 
-      // LOG(INFO) << "Input buffer:";
-      // for (int i = 0; i < batch; ++i) {
-      //   for (int j = 0; j < in_feat; ++j) {
-      //     std::cerr << std::hex << (int32_t)(input[i * in_feat + j]) << ' ';
-      //   }
-      //   std::cerr << "\n";
-      // }
-
       // Process weights layout
       int ptr = 0;
       for (int i = 0; i < out_feat / block; ++i) {
@@ -126,36 +100,6 @@ class ILAVTARuntime : public JSONRuntimeBase {
         }
       }
 
-      // LOG(INFO) << "weights:";
-      // for (int i = 0; i < out_feat; ++i) {
-      //   for (int j = 0; j < in_feat; ++j) {
-      //     std::cerr << (int32_t)weight[i * in_feat + j] << " ";
-      //     if (j % block == block - 1) std::cerr << "| ";
-      //   }
-      //   std::cerr << "\n";
-      //   if (i % block == block - 1) std::cerr << "\n";
-      // }
-
-      // LOG(INFO) << "Transformed weights:";
-      // for (int i = 0; i < out_feat; ++i) {
-      //   for (int j = 0; j < in_feat; ++j) {
-      //     std::cerr << (int32_t)t_weight[i * in_feat + j] << " ";
-      //     if (j % block == block - 1) std::cerr << "| ";
-      //   }
-      //   std::cerr << "\n";
-      //   if (i % block == block - 1) std::cerr << "\n";
-      // }
-
-      // Process bias layout (pad 0)
-      // for (int i = 0; i < out_feat; ++i) {
-      //   for (int j = 0; j < in_feat; ++j) {
-      //     if (i * in_feat + j < bias_size) {
-      //       bias_buf[i * in_feat + j] = bias[i * in_feat + j];
-      //     } else {
-      //       bias_buf[i * in_feat + j] = 0;
-      //     }
-      //   }
-      // }
       auto output_data = data_entry_[outputs_[0].id_];
       auto output_node = nodes_[outputs_[0].id_];
       int8_t* out_buf = reinterpret_cast<int8_t*>(output_data->data);
@@ -180,23 +124,20 @@ class ILAVTARuntime : public JSONRuntimeBase {
                 "ilavta_dense_" + std::to_string(batch) + "x" + std::to_string(in_feat) + "_" + std::to_string(out_feat));
       std::string filename = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
       std::string ila_asm = CompileGEMM(batch, in_feat, out_feat, factor, nbits, filename);
-      // nlohmann::json asm_data = get_gemm(batch, in_feat, out_feat, factor, nbits);
-      // std::ofstream fout(ila_asm);
-      // fout << asm_data;
-      // fout.close();
       LOG(INFO) << "Size " << GetDataSize(*output_data) << " " << batch * n_wgt_rows;
       sim_time = runSimGetData("ilavta_dense", driver_dir, ila_asm, data_file,
                   batch * out_feat, batch, out_feat, acc_buf, "int8_t");
       ptr = 0;
       memcpy(out_buf, acc_buf, sizeof(int8_t) * GetDataSize(*output_data));
+      #if DIFFDEBUG
+      std::string cmd = "cp result/ilavta_dense_out.json diff_result/ilavta_dense_out_" + std::to_string(dense_count) + ".json";
+      std::system(cmd.c_str());
+      cmd = "echo " + std::to_string(s_act_val) + " >> diff_result/scale_" + std::to_string(dense_count++) + ".txt";
+      std::system(cmd.c_str());
+      #endif
       delete[] acc_buf;
       delete[] t_weight;
       delete[] bias_buf;
-      // for (int i = 0; i < batch; ++i) {
-      //   for (int j = 0; j < out_feat; ++j) {
-      //     out_buf[i * out_feat + j] = (acc_buf[i * out_feat + j]);
-      //   }
-      // }
     } else if (outputs_.size() == 1 && nodes_[outputs_[0].id_].GetOpName() == "ilavta.bias_add") {
       auto input_eid = EntryID(input_nodes_[0], 0);
       auto bias_eid = EntryID(input_nodes_[1], 0);
@@ -358,20 +299,6 @@ class ILAVTARuntime : public JSONRuntimeBase {
       std::string ila_asm   = call_node.GetAttr<std::vector<std::string>>("asm_file")[0];
       auto dtype            = DLDataType2String(output_data->dtype);
       sim_time = runSimGetData("ilavta_conv1d", driver_dir, ila_asm, data_file, GetDataSize(*output_data), vec_cnt, O, output_data->data, dtype);
-      // uint8_t* out_data = reinterpret_cast<uint8_t*>(malloc(sizeof(uint8_t) * GetDataSize(*output_data)));
-      // uint8_t* raw_data = reinterpret_cast<uint8_t*>(output_data->data);
-      // ptr = 0;
-      // for (int batch = 0; batch < N; ++batch) {
-      //   int start_offset = batch * O * (W - wgtW + 1);
-      //   for (int n_kernel = 0; n_kernel < O; ++n_kernel) {
-      //     for (int ncol = 0; ncol < W  - wgtW + 1; ++ncol) {
-      //       out_data[ptr++] = raw_data[start_offset + n_kernel + ncol * O];
-      //     }
-      //   }
-      // }
-      // for (int i = 0; i < ptr; ++i) {
-      //   raw_data[i] = out_data[i];
-      // }
     }
     std::ifstream fin(wall_clock_file);
     nlohmann::json wall_clock_data = nlohmann::json::parse(fin);
@@ -387,6 +314,7 @@ class ILAVTARuntime : public JSONRuntimeBase {
 
  protected:
  private:
+  int dense_count = 0;
 };  // namespace runtime
 
 runtime::Module ILAVTARuntimeCreate(String symbol_name, String graph_json,
